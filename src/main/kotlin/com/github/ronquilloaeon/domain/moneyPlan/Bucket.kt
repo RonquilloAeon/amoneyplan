@@ -10,13 +10,15 @@ enum class BucketType(val short_desc: String, val operator: String) {
     DEBT("debt", "-"),
     EMERGENCY_EXPENSE("emergency_expense", "-"),
     EMERGENCY_FUND("emergency_fund", "-"),
+    HEALTH("health", "-"),
     HOUSING("housing", "-"),
     INVESTMENT("investment", "-"),
     LOAN("loan", "-"),
     MISC_EXPENSE("miscellaneous_expense", "-"),
     PERSONAL("personal", "-"),
     SAVINGS("savings", "-"),
-    TRANSPORTATION("transportation", "-");
+    TRANSPORTATION("transportation", "-"),
+    WELLNESS("wellness", "-");
 
     init {
         val validOperators = arrayOf("+", "-")
@@ -32,12 +34,12 @@ enum class BucketType(val short_desc: String, val operator: String) {
     }
 }
 
-class Bucket(id: UUID, val name: String, val type: BucketType, val amount: Money) : Entity<UUID>(id) {
+class Bucket(id: UUID, val name: String, val type: BucketType, val balance: Money) : Entity<UUID>(id) {
     companion object {
-        fun create(id: UUID? = null, name: String, type: BucketType, amount: Money) : Bucket {
+        fun create(id: UUID? = null, name: String, type: BucketType, balance: Money) : Bucket {
             val entityId = id ?: UUID.randomUUID()
 
-            return Bucket(entityId, name, type, amount)
+            return Bucket(entityId, name, type, balance)
         }
     }
 }

@@ -17,9 +17,9 @@ opened an account in a separate bank.
 
 ## Sample Money Plan
 Each money plan correlates to a paycheck. The day I get paid, I create a money plan to immediately move money to all
-buckets (gotta put money to work). I get paid twice a month, so I create two money plans each month.
+accounts (gotta put money to work). I get paid twice a month, so I create two money plans each month.
 
-| Debit/Credit | Account           | Bucket              | Amount |
+| Debit/Credit | Account           | Account             | Amount |
 |--------------|-------------------|---------------------|--------|
 | Credit       | Bank A            | Checking            | 2500   |
 |              |                   |                     |        |

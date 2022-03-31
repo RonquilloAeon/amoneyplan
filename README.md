@@ -19,38 +19,33 @@ opened an account in a separate bank.
 Each money plan correlates to a paycheck. The day I get paid, I create a money plan to immediately move money to all
 accounts (gotta put money to work). I get paid twice a month, so I create two money plans each month.
 
+In this example, the debit represents the starting balance of Bank A after getting paid.
+
 | Debit/Credit | Account           | Account             | Amount |
 |--------------|-------------------|---------------------|--------|
-| Credit       | Bank A            | Checking            | 2500   |
+| Debit        | Starting Balance  | Bank A              | 2500   |
 |              |                   |                     |        |
-| Debit        | Bank A            | Rent                | (700)  |
+| Credit       | Bank A            | Rent                | (700)  |
 |              |                   | Cell Bill           | (150)  |
 |              |                   |                     |        |
-| Debit        | Investment Bank A | General Investing   | (250)  |
+| Credit       | Investment Bank A | General Investing   | (250)  |
 |              |                   |                     |        |
-| Debit        | Investment Bank B | IRA                 | (200)  |
+| Credit       | Investment Bank B | IRA                 | (200)  |
 |              |                   |                     |        |
-| Debit        | Bank B            | Checking            | (600)  |
+| Credit       | Bank B            | Checking            | (600)  |
 |              |                   | Emergency Fund      | (100)  |
 |              |                   | Car Repairs Savings | (100)  |
 |              |                   |                     |        |
-| Debit        | Credit Card A     | Gas                 | (100)  |
+| Credit       | Credit Card A     | Gas                 | (100)  |
 |              |                   | Splurge             | (200)  |
 |              |                   | Subscriptions       | (100)  |
 |              |                   |                     |        |
 |              |                   |                     | 0      |
 
-## Misc Technical Stuff
+## Accounting stuff
 
-### Resources
-- https://www.baeldung.com/maven-multi-module-project-java-jpms
-- https://mkyong.com/maven/maven-how-to-create-a-multi-module-project/
-- https://dzone.com/articles/maven-multi-module-project-with-versioning
-- https://github.com/jitpack/maven-modular
-- https://stackoverflow.com/a/808534/5340241
-- https://stackoverflow.com/questions/29712865/maven-cannot-resolve-dependency-for-module-in-same-multi-module-project
-- https://github.com/bringmeister/ddd-with-kotlin
-- https://khalilstemmler.com/articles/typescript-domain-driven-design/aggregate-design-persistence/
+> A debit is an accounting entry that either increases an asset or expense account, or decreases a liability or equity account. It is positioned to the left in an accounting entry.
 
-### Commands
-`mvn archetype:generate -DarchetypeGroupId=org.jetbrains.kotlin -DarchetypeArtifactId=kotlin-archetype-jvm -Dgroupid=com.github.ronquilloaeon -DartifactId=domain`
+> A credit is an accounting entry that either increases a liability or equity account, or decreases an asset or expense account. It is positioned to the right in an accounting entry.
+
+See https://www.accountingtools.com/articles/debits-and-credits/ for more information.

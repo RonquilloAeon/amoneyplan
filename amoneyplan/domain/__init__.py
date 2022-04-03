@@ -1,3 +1,6 @@
+from ulid import ULID
+
+
 class Entity:
     _id: str = None
 
@@ -6,6 +9,10 @@ class Entity:
 
     def __eq__(self, o: object) -> bool:
         return self.id == getattr(o, "id", None)
+
+    @staticmethod
+    def generate_id() -> str:
+        return str(ULID())
 
     @property
     def id(self):

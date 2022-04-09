@@ -4,7 +4,7 @@ import pytest
 
 from amoneyplan.domain.account import Account
 from amoneyplan.domain.entry import Entry
-from amoneyplan.domain.money import Money, Currency
+from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import MoneyPlan
 
 
@@ -31,7 +31,7 @@ def test_money_plan_create_with_id(the_date):
 
 
 def test_money_plan_create_with_funds(the_date):
-    starting_funds = Money.parse(2500, Currency("USD"))
+    starting_funds = Money.parse(2500)
     entry = Entry.create(
         Account(name="Main Checking Account Balance"),
         Account(name="Main Checking Account A"),

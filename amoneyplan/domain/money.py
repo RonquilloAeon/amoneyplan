@@ -17,7 +17,9 @@ class Money:
     currency: Currency
 
     @classmethod
-    def parse(cls, amount: int | str, currency) -> "Money":
+    def parse(cls, amount: int | str, currency: Currency = None) -> "Money":
+        if not currency:
+            currency = Currency("USD")
         return cls(amount=Decimal(amount), currency=currency)
 
     def __add__(self, other: "Money") -> "Money":

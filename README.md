@@ -21,7 +21,7 @@ accounts (gotta put money to work). I get paid twice a month, so I create two mo
 
 In this example, the debit represents the starting balance of Bank A after getting paid.
 
-| Debit/Credit | Account           | Account             | Amount |
+| Debit/Credit | Account           | Bucket              | Amount |
 |--------------|-------------------|---------------------|--------|
 | Debit        | Starting Balance  | Bank A              | 2500   |
 |              |                   |                     |        |

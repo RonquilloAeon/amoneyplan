@@ -1,46 +1,54 @@
 # A Money Plan
-This spin on budgeting is essentially zero-based budgeting except that I use it primarily to disperse funds. The way
-I've been able to get myself to manage my finances is by only budgeting. I do not track every expense (I know,
+This spin on budgeting is essentially zero-based budgeting except that I use it to disperse funds. The way
+I've been able to get myself to manage my finances is by budgeting. I do not track every expense (I know,
 I'm a heretic). Of course, for my budgeting to work, I have a good idea of how much I spend and what my fixed expenses
 are.
 
 By using many accounts, I've created a digital version of the envelope system. I used the cash envelope system for a
-while, but it's annoying because you have to go to an ATM to get cash then you have to remember to carry all your
+while, but it's annoying because you have to go to an ATM to get cash. Then you have to remember to carry all your
 envelopes wherever you go. And I don't like paying in cash, it's tedious.
 
 This plan assumes that you have a checking account where you receive direct deposits. From this account, you disperse
-funds to other accounts, to savings/investments, and expenses.
+funds to other accounts, to savings/investments, etc. You also ought to use this account to pay cards and other living
+expenses.
 
-Do not use this checking account to pay for day-to-day stuff (groceries, gas, clothes, etc). Open a separate checking
-account with a debit card that you'll use to pay for groceries, eating out, clothing, hair cuts, etc. I personally
-opened an account in a separate bank.
+The checking account where I receive direct deposits is not for day-to-day stuff (groceries, gas, clothes, etc).
+I have a separate checking account with its own debit card that I use to pay for groceries, eating out, clothing,
+hair cuts, etc. I personally opened an account in a separate bank to keep day-to-day expenses separate from funds used
+to pay for housing, utilities, insurance, etc.
 
 ## Sample Money Plan
-Each money plan correlates to a paycheck. The day I get paid, I create a money plan to immediately move money to all
-accounts (gotta put money to work). I get paid twice a month, so I create two money plans each month.
+Each money plan corresponds to a paycheck. The day I get paid, I create a money plan to immediately move the money to
+all the corresponding accounts (gotta put money to work). I get paid twice a month, so I create two money plans each
+month.
 
-In this example, the debit represents the starting balance of Bank A after getting paid.
+In this example, the Starting Balance represents the balance of Bank A's Checking Account after getting paid.
 
-| Debit/Credit | Account           | Bucket              | Amount |
-|--------------|-------------------|---------------------|--------|
-| Debit        | Starting Balance  | Bank A              | 2500   |
-|              |                   |                     |        |
-| Credit       | Bank A            | Rent                | (700)  |
-|              |                   | Cell Bill           | (150)  |
-|              |                   |                     |        |
-| Credit       | Investment Bank A | General Investing   | (250)  |
-|              |                   |                     |        |
-| Credit       | Investment Bank B | IRA                 | (200)  |
-|              |                   |                     |        |
-| Credit       | Bank B            | Checking            | (600)  |
-|              |                   | Emergency Fund      | (100)  |
-|              |                   | Car Repairs Savings | (100)  |
-|              |                   |                     |        |
-| Credit       | Credit Card A     | Gas                 | (100)  |
-|              |                   | Splurge             | (200)  |
-|              |                   | Subscriptions       | (100)  |
-|              |                   |                     |        |
-|              |                   |                     | 0      |
+| Account           | Category            | Amount |
+|-------------------|---------------------|--------|
+| Starting Balance  | Bank A              | 5000   |
+|                   |                     |        |
+| Bank A            | Rent                | (1400) |
+|                   | Utilities           | (650)  |
+|                   | Cell Bill           | (150)  |
+|                   |                     |        |
+| Investment Bank A | General Investing   | (800)  |
+|                   |                     |        |
+| Investment Bank B | IRA                 | (200)  |
+|                   |                     |        |
+| Bank B            | Checking            | (600)  |
+|                   | Emergency Fund      | (100)  |
+|                   | Car Repairs Savings | (100)  |
+|                   |                     |        |
+| Credit Card A     | Gas                 | (200)  |
+|                   | Splurge             | (300)  |
+|                   | Groceries           | (400)  |
+|                   | Subscriptions       | (100)  |
+|                   |                     |        |
+|                   |                     | 0      |
+
+Notice that in this sample plan, the funds to pay rent, utilities, and the cell bill are left in Bank A. The rest of the
+funds are dispersed to the other accounts. Bank B is used for day-to-day expenses and emergency savings.
 
 ## Accounting stuff
 

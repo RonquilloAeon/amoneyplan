@@ -1,18 +1,27 @@
-from ulid import ULID
+from dataclasses import dataclass
+
+
+class IllegalStateError(Exception):
+    ...
+
+
+@dataclass(frozen=True)
+class Id:
+    id: str
+
+    def __post_init__(self):
+        if len(self.id) == 0:
+            raise ValueError("Id cannot be empty")
 
 
 class Entity:
-    _id: str = None
+    _id: Id
 
-    def __init__(self, id: str):
+    def __init__(self, id: Id):
         self._id = id
 
     def __eq__(self, o: object) -> bool:
         return self.id == getattr(o, "id", None)
-
-    @staticmethod
-    def generate_id() -> str:
-        return str(ULID())
 
     @property
     def id(self):

@@ -22,13 +22,13 @@ Each money plan corresponds to a paycheck. The day I get paid, I create a money 
 all the corresponding accounts (gotta put money to work). I get paid twice a month, so I create two money plans each
 month.
 
-In this example, the Starting Balance represents the balance of Bank A's Checking Account after getting paid.
+In this example, the Starting Balance represents the balance of Bank Abc's Checking Account after getting paid.
 
 | Account           | Category            | Amount |
 |-------------------|---------------------|--------|
-| Starting Balance  | Bank A              | 5000   |
+| Starting Balance  | Bank Abc            | 5000   |
 |                   |                     |        |
-| Bank A            | Rent                | (1400) |
+| Bank Abc          | Rent                | (1400) |
 |                   | Utilities           | (650)  |
 |                   | Cell Bill           | (150)  |
 |                   |                     |        |
@@ -36,7 +36,7 @@ In this example, the Starting Balance represents the balance of Bank A's Checkin
 |                   |                     |        |
 | Investment Bank B | IRA                 | (200)  |
 |                   |                     |        |
-| Bank B            | Checking            | (600)  |
+| Bank XYZ          | Checking            | (600)  |
 |                   | Emergency Fund      | (100)  |
 |                   | Car Repairs Savings | (100)  |
 |                   |                     |        |
@@ -47,8 +47,8 @@ In this example, the Starting Balance represents the balance of Bank A's Checkin
 |                   |                     |        |
 |                   |                     | 0      |
 
-Notice that in this sample plan, the funds to pay rent, utilities, and the cell bill are left in Bank A. The rest of the
-funds are dispersed to the other accounts. Bank B is used for day-to-day expenses and emergency savings.
+Notice that in this sample plan, the funds to pay rent, utilities, and the cell bill are left in Bank Abc. The rest of
+the funds are dispersed to the other accounts. Bank XYZ is used for day-to-day expenses and emergency savings.
 
 ## Accounting stuff
 

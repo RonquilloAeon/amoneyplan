@@ -6,7 +6,7 @@ setup(
     name="amoneyplan",
     version=VERSION,
     install_requires=[
-        "pydantic==1.9.0",
+        "pydantic==1.10.13",
         "python-ulid==1.1.0"
     ],
     packages=find_packages(),

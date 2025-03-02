@@ -1,3 +1,36 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "amoneyplan"
+version = "0.1.0"
+description = "A personal money management app using event sourcing"
+readme = "README.md"
+authors = ["Project Author <author@example.com>"]
+packages = [{include = "amoneyplan"}]
+repository = "https://github.com/RonquilloAeon/amoneyplan"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+eventsourcing-django = "^0.5.1"
+strawberry-graphql = "^0.261.1"
+psycopg = {extras = ["binary", "pool"], version = "^3.2.3"}
+django-cors-headers = "^4.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+ruff = "^0.9.9"
+nox = "^2025.2.9"
+pytest-django = "^4.10.0"
+
 [tool.pytest.ini_options]
 addopts = "-s"
 testpaths = "tests"
+python_files = "test_*.py"
+django_find_project = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I"]

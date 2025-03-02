@@ -18,4 +18,4 @@ if [ "$#" -eq 0 ] || [ "$1" = "help" ]; then
 fi
 
 # Change to the Terraform directory and execute tf.sh with all arguments
-cd dev/terraform && ./tf.sh "$@"
+cd infra_dev/terraform && ./tf.sh "$@"

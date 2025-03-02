@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A personal money management app using event sourcing"
 readme = "README.md"
 authors = ["Project Author <author@example.com>"]
-packages = [{include = "amoneyplan"}]
+packages = [{include = "src"}]
 repository = "https://github.com/RonquilloAeon/amoneyplan"
 
 [tool.poetry.dependencies]
@@ -18,6 +18,7 @@ strawberry-graphql = "^0.261.1"
 psycopg = {extras = ["binary", "pool"], version = "^3.2.3"}
 django-cors-headers = "^4.7.0"
 pre-commit = "^4.1.0"
+uvicorn = "^0.34.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

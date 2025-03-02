@@ -10,11 +10,12 @@ __pycache__/
 .vscode/
 
 # Infrastructure
-dev/terraform/.terraform/
-dev/terraform/.terraform.lock.hcl
-dev/terraform/terraform.tfstate
-dev/terraform/.tfstate.backup
-dev/terraform/terraform.tfvars
+infra_dev/terraform/.terraform/
+infra_dev/terraform/.terraform.lock.hcl
+infra_dev/terraform/terraform.tfstate
+infra_dev/terraform/.tfstate.backup
+infra_dev/terraform/terraform.tfvars
+infra_dev/terraform/amoneyplan-config
 
 # Sandbox
 a_sandbox/

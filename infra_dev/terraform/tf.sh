@@ -10,6 +10,7 @@ function help() {
     echo "  clean     - Clean up all local state"
     echo "  logs      - View logs (backend or postgres)"
     echo "  reload    - Restart the backend pod to pick up changes"
+    echo "  docker    - View Docker build logs manually"
     echo "  help      - Show this help message"
 }
 
@@ -18,6 +19,7 @@ function init() {
 }
 
 function up() {
+    export TF_LOG=WARN
     terraform apply -auto-approve
 }
 
@@ -27,12 +29,6 @@ function down() {
 
 function clean() {
     rm -rf .terraform .terraform.lock.hcl terraform.tfstate terraform.tfstate.backup
-}
-
-function reload() {
-    echo "Restarting backend pod..."
-    kubectl -n amoneyplan rollout restart deployment backend
-    kubectl -n amoneyplan rollout status deployment backend
 }
 
 function logs() {
@@ -55,6 +51,18 @@ function logs() {
     esac
 }
 
+function reload() {
+    echo "Restarting backend pod..."
+    kubectl -n amoneyplan rollout restart deployment backend
+    kubectl -n amoneyplan rollout status deployment backend
+}
+
+function docker_logs() {
+    echo "Building Docker image manually to see logs..."
+    cd ../../backend
+    docker build -t amoneyplan-backend:latest .
+}
+
 case "$1" in
     init)
         init
@@ -68,11 +76,14 @@ case "$1" in
     clean)
         clean
         ;;
+    logs)
+        logs "$@"
+        ;;
     reload)
         reload
         ;;
-    logs)
-        logs "$@"
+    docker)
+        docker_logs
         ;;
     *)
         help

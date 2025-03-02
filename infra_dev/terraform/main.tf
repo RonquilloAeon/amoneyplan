@@ -53,6 +53,12 @@ resource "kind_cluster" "amoneyplan" {
         host_port     = 5432
         protocol      = "TCP"
       }
+
+      # Add source code mounting for hot reload
+      extra_mounts {
+        host_path = "${path.root}/../../backend/src"
+        container_path = "/src"
+      }
     }
   }
 
@@ -73,6 +79,7 @@ resource "docker_image" "backend" {
   build {
     context = "${path.root}/../../backend"
     tag     = ["amoneyplan-backend:latest"]
+    no_cache = true
   }
   triggers = {
     dir_sha1 = sha1(join("", [for f in fileset("${path.root}/../../backend", "**"): filesha1("${path.root}/../../backend/${f}")]))

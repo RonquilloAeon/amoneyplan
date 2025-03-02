@@ -56,6 +56,12 @@ resource "kubernetes_deployment" "postgres" {
       }
     }
   }
+
+  timeouts {
+    create = "1m"
+    delete = "5m"
+    update = "1m"
+  }
 }
 
 resource "kubernetes_service" "postgres" {
@@ -113,6 +119,8 @@ resource "kubernetes_deployment" "backend" {
         container {
           name  = "backend"
           image = "amoneyplan-backend:latest"
+          image_pull_policy = "Never"  # Don't try to pull from Docker Hub
+          working_dir = "/src"
 
           port {
             container_port = 8000
@@ -184,15 +192,15 @@ resource "kubernetes_deployment" "backend" {
           ]
 
           volume_mount {
-            name       = "backend-code"
-            mount_path = "/app"
+            name = "src-code"
+            mount_path = "/src"
           }
         }
 
         volume {
-          name = "backend-code"
+          name = "src-code"
           host_path {
-            path = "${path.root}/../../backend"
+            path = "/src"
             type = "Directory"
           }
         }

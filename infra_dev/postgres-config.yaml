@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: postgres-config
-  namespace: amoneyplan
-data:
-  POSTGRES_DB: amoneyplan
-  POSTGRES_USER: postgres
-  POSTGRES_PASSWORD: postgres

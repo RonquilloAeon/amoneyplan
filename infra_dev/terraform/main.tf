@@ -44,7 +44,7 @@ resource "kind_cluster" "amoneyplan" {
 
       extra_port_mappings {
         container_port = 30080
-        host_port     = 8000
+        host_port     = 8001
         protocol      = "TCP"
       }
 

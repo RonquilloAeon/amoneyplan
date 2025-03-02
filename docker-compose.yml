@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres/17-alpine
+    volumes:
+      - .postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=amoneyplan
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      bash -c "
+        python manage.py migrate &&
+        python manage.py init_db &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8001:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=amoneyplan.settings
+      - DB_NAME=amoneyplan
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

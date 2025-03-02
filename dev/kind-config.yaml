@@ -1,0 +1,11 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraPortMappings:
+  - containerPort: 30080  # Map port 30080 from the node to host 8000
+    hostPort: 8000
+    protocol: TCP
+  - containerPort: 30432  # Map port 30432 from the node to host 5432
+    hostPort: 5432
+    protocol: TCP

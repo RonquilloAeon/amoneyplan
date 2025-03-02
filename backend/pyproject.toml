@@ -17,6 +17,7 @@ eventsourcing-django = "^0.5.1"
 strawberry-graphql = "^0.261.1"
 psycopg = {extras = ["binary", "pool"], version = "^3.2.3"}
 django-cors-headers = "^4.7.0"
+pre-commit = "^4.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

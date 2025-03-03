@@ -3,7 +3,7 @@ Management command to initialize the database for the Money Plan app.
 """
 from django.core.management.base import BaseCommand
 from django.db import connection
-from eventsourcing_django.factory import DjangoInfrastructureFactory
+from eventsourcing_django.factory import InfrastructureFactory
 
 from amoneyplan.application.money_plan_service import MoneyPlanService
 
@@ -20,7 +20,7 @@ class Command(BaseCommand):
         # Create the tables for event sourcing
         try:
             # Initialize the infrastructure
-            factory = DjangoInfrastructureFactory()
+            factory = InfrastructureFactory()
             with connection.schema_editor() as schema_editor:
                 tables = factory.construct_tables(schema_editor)
                 for table in tables:

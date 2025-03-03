@@ -2,10 +2,13 @@
 Application service for managing Money Plans.
 """
 
+import logging
+from dataclasses import asdict
 from typing import List, Optional, Union
 from uuid import UUID
 
 from eventsourcing.application import Application
+from eventsourcing.persistence import Transcoding
 from eventsourcing.system import ProcessingEvent
 
 from amoneyplan.domain.money import Money
@@ -16,6 +19,31 @@ from amoneyplan.domain.money_plan import (
     PlanAlreadyCommittedError,
 )
 
+logger = logging.getLogger("amoneyplan")
+
+
+class BucketConfigTranscoding(Transcoding):
+    """Custom transcoding for BucketConfig class."""
+
+    type = BucketConfig
+    name = "bucket_config"
+
+    def encode(self, obj: BucketConfig) -> dict:
+        """Convert BucketConfig to a dictionary for serialization."""
+        logger.info("Encoding BucketConfig %s", obj)
+
+        data = asdict(obj)
+        data["allocated_amount"] = float(data["allocated_amount"]["amount"])
+        return data
+
+    def decode(self, data: dict) -> BucketConfig:
+        """Convert dictionary to BucketConfig for deserialization."""
+        return BucketConfig(
+            bucket_name=data["bucket_name"],
+            category=data["category"],
+            allocated_amount=Money(data["allocated_amount"]),
+        )
+
 
 class MoneyPlanner(Application):
     """
@@ -24,6 +52,13 @@ class MoneyPlanner(Application):
     """
 
     name = "money_planner"
+
+    def __init__(self, env):
+        super().__init__(env)
+
+    def register_transcodings(self, transcoder):
+        super().register_transcodings(transcoder)
+        transcoder.register(BucketConfigTranscoding())
 
     # The current active money plan being worked on
     current_plan_id: Optional[UUID] = None
@@ -111,6 +146,9 @@ class MoneyPlanner(Application):
             PlanAlreadyCommittedError: If the plan is already committed
         """
         plan = self.get_plan(plan_id)
+
+        logger.info("Adding account %s to plan %s", account_name, plan_id)
+
         account_id = plan.add_account(account_name=account_name, buckets=buckets)
         self.save(plan)
         return account_id

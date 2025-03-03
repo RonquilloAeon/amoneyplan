@@ -186,7 +186,6 @@ resource "kubernetes_deployment" "backend" {
           command = ["/bin/bash", "-c"]
           args    = [<<-EOT
             python manage.py migrate &&
-            python manage.py init_db --sample &&
             python manage.py runserver 0.0.0.0:8000
           EOT
           ]

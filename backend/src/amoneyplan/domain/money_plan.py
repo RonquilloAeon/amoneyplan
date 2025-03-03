@@ -354,6 +354,7 @@ class MoneyPlan(Aggregate):
         # All invariants satisfied, commit the plan
         self.committed = True
 
+    @event
     def add_account(self, account_name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
         """
         Add a new account to the plan.

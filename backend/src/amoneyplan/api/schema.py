@@ -14,7 +14,7 @@ from strawberry.types import Info
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import AccountAllocationConfig, BucketConfig, MoneyPlanError
 
-logger = logging.getLogger("django")
+logger = logging.getLogger("amoneyplan")
 
 
 # GraphQL output types
@@ -155,7 +155,7 @@ class PlanStartInput:
 
 @strawberry.input
 class AllocateFundsInput:
-    plan_id: str
+    plan_id: relay.GlobalID
     account_id: str
     bucket_name: str
     amount: float
@@ -163,8 +163,8 @@ class AllocateFundsInput:
 
 @strawberry.input
 class ReverseAllocationInput:
-    plan_id: str
-    account_id: str
+    plan_id: relay.GlobalID
+    account_id: relay.GlobalID
     bucket_name: str
     original_amount: float
     corrected_amount: float
@@ -172,28 +172,28 @@ class ReverseAllocationInput:
 
 @strawberry.input
 class PlanBalanceAdjustInput:
-    plan_id: str
+    plan_id: relay.GlobalID
     adjustment: float
     reason: str = ""
 
 
 @strawberry.input
 class AccountConfigurationChangeInput:
-    plan_id: str
-    account_id: str
+    plan_id: relay.GlobalID
+    account_id: relay.GlobalID
     new_bucket_config: List[BucketConfigInput]
 
 
 @strawberry.input
 class AddAccountInput:
-    plan_id: str
+    plan_id: relay.GlobalID
     account_name: str
     buckets: Optional[List[BucketConfigInput]] = None
 
 
 @strawberry.input
 class CommitPlanInput:
-    plan_id: str
+    plan_id: relay.GlobalID
 
 
 # GraphQL queries
@@ -375,19 +375,27 @@ class MoneyPlanMutations:
         Add an account to a Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
+        plan_id = input.plan_id.node_id
+        logger.info(f"Adding account '{input.account_name}' to plan {plan_id}")
 
         try:
             buckets = None
             if input.buckets:
                 buckets = [bucket.to_domain() for bucket in input.buckets]
+                logger.info(f"With buckets: {[b.bucket_name for b in buckets]}")
+            else:
+                logger.info("No buckets specified, will use default bucket")
 
-            _ = service.add_account(
-                plan_id=UUID(input.plan_id), account_name=input.account_name, buckets=buckets
+            account_id = service.add_account(
+                plan_id=plan_id, account_name=input.account_name, buckets=buckets
             )
+            logger.info(f"Account created with ID: {account_id}")
 
-            plan = service.get_plan(UUID(input.plan_id))
+            plan = service.get_plan(plan_id)
+            logger.info(f"Retrieved updated plan. Account count: {len(plan.accounts)}")
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
+            logger.error(f"Error adding account: {e}", exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation

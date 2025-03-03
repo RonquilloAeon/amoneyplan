@@ -13,7 +13,7 @@ __pycache__/
 infra_dev/terraform/.terraform/
 infra_dev/terraform/.terraform.lock.hcl
 infra_dev/terraform/terraform.tfstate
-infra_dev/terraform/.tfstate.backup
+infra_dev/terraform/terraform.tfstate.backup
 infra_dev/terraform/terraform.tfvars
 infra_dev/terraform/amoneyplan-config
 

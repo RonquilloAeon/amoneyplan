@@ -1,1 +1,21 @@
+# Development
+.postgres-data/
+*.pyc
+__pycache__/
+.env
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Infrastructure
+infra_dev/terraform/.terraform/
+infra_dev/terraform/.terraform.lock.hcl
+infra_dev/terraform/terraform.tfstate
+infra_dev/terraform/.tfstate.backup
+infra_dev/terraform/terraform.tfvars
+infra_dev/terraform/amoneyplan-config
+
+# Sandbox
 a_sandbox/

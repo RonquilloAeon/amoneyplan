@@ -4,7 +4,7 @@ import pytest
 
 from amoneyplan.domain.account import Account
 from amoneyplan.domain.entry import Entry
-from amoneyplan.domain.money import Money, Currency
+from amoneyplan.domain.money import Currency, Money
 from amoneyplan.domain.money_plan import MoneyPlan
 
 

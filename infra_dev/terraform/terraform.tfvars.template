@@ -1,0 +1,12 @@
+# Copy this file to terraform.tfvars and update the project_root path
+# to match your local environment
+
+# The absolute path to your project root directory
+project_root = "/path/to/your/amoneyplan-1"
+
+# Optional: Override other default settings if needed
+# postgres_version = "14-alpine"
+# postgres_storage = "1Gi"
+# backend_replicas = 1
+# backend_port = 8000
+# postgres_port = 5432

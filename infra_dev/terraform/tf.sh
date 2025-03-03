@@ -7,6 +7,8 @@ function help() {
     echo "  init      - Initialize Terraform"
     echo "  up        - Create or update infrastructure"
     echo "  down      - Destroy infrastructure"
+    echo "  stop      - Stop the kind cluster (can be restarted later)"
+    echo "  start     - Start a previously stopped kind cluster"
     echo "  clean     - Clean up all local state"
     echo "  logs      - View logs (backend or postgres)"
     echo "  reload    - Restart the backend pod to pick up changes"
@@ -25,6 +27,29 @@ function up() {
 
 function down() {
     terraform destroy -auto-approve
+}
+
+function stop() {
+    echo "Stopping kind cluster container..."
+    if docker ps -q --filter "name=amoneyplan-control-plane" | grep -q .; then
+        docker stop amoneyplan-control-plane
+        echo "Kind cluster stopped. Use './tf.sh start' to restart it."
+    else
+        echo "Kind cluster container not found or already stopped."
+    fi
+}
+
+function start() {
+    echo "Starting kind cluster container..."
+    if docker ps -a -q --filter "name=amoneyplan-control-plane" | grep -q .; then
+        docker start amoneyplan-control-plane
+        echo "Waiting for cluster to be ready..."
+        sleep 5
+        kubectl wait --for=condition=ready nodes --all --timeout=60s
+        echo "Kind cluster started."
+    else
+        echo "Kind cluster container not found. Use 'up' command to create a new cluster."
+    fi
 }
 
 function clean() {
@@ -72,6 +97,12 @@ case "$1" in
         ;;
     down)
         down
+        ;;
+    stop)
+        stop
+        ;;
+    start)
+        start
         ;;
     clean)
         clean

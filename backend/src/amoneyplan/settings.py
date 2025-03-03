@@ -29,8 +29,8 @@ INSTALLED_APPS = [
     'strawberry.django',
     'eventsourcing_django',
     # Local apps
-    'amoneyplan.domain',
-    'amoneyplan.api',
+    'amoneyplan.money_plans',
+    'amoneyplan.eventsourcing_runner',
 ]
 
 MIDDLEWARE = [
@@ -111,9 +111,17 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # In development allow all origins
 #     "https://yourappdomain.com",
 # ]
 
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
+CSRF_COOKIE_SAMESITE = 'Lax' if DEBUG else 'Strict'
+
 # Event Sourcing configuration
-EVENTSOURCING = {
+EVENT_SOURCING_SETTINGS = {
     'PERSISTENCE_MODULE': 'eventsourcing_django',
     'DJANGO_EVENT_STORE_APP_NAME': 'eventsourcing_django',
     'SNAPSHOT_THRESHOLD': 50,  # Take snapshots after 50 events
+    'INFRASTRUCTURE_FACTORY': 'eventsourcing_django.factory.DjangoInfrastructureFactory',
 }

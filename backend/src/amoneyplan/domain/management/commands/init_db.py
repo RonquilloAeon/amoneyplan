@@ -3,9 +3,10 @@ Management command to initialize the database for the Money Plan app.
 """
 from django.core.management.base import BaseCommand
 from django.db import connection
-from eventsourcing_django.factory import InfrastructureFactory
+from eventsourcing.utils import Environment
+from eventsourcing_django.factory import Factory
 
-from amoneyplan.application.money_plan_service import MoneyPlanService
+from backend.src.amoneyplan.money_plans.application import MoneyPlanService
 
 
 class Command(BaseCommand):
@@ -20,11 +21,17 @@ class Command(BaseCommand):
         # Create the tables for event sourcing
         try:
             # Initialize the infrastructure
-            factory = InfrastructureFactory()
-            with connection.schema_editor() as schema_editor:
-                tables = factory.construct_tables(schema_editor)
-                for table in tables:
-                    self.stdout.write(f"Created table: {table}")
+            env = Environment("amoneyplan")
+            factory = Factory.construct(env)
+
+            print(vars(factory))
+            # with connection.schema_editor() as schema_editor:
+                
+
+            #     tables = factory.
+
+            #     for table in tables:
+            #         self.stdout.write(f"Created table: {table}")
             
             self.stdout.write(self.style.SUCCESS("Database initialization completed successfully!"))
             

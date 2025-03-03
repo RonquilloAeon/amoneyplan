@@ -23,7 +23,7 @@ from amoneyplan.domain.money_plan import (
 )
 
 
-class MoneyPlanService(Application):
+class MoneyPlanner(Application):
     """
     Service for creating and managing Money Plans.
     Uses the eventsourcing library to persist and retrieve Money Plans.
@@ -60,7 +60,7 @@ class MoneyPlanService(Application):
                 )
         
         # Create new plan
-        plan = MoneyPlan.__create__()
+        plan = MoneyPlan()
         plan.start_plan(
             initial_balance=initial_balance,
             default_allocations=default_allocations,

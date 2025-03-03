@@ -6,9 +6,9 @@ from typing import List, Optional, Dict, Union
 from uuid import UUID
 
 import strawberry
+from django.apps import apps
 from strawberry.types import Info
 
-from amoneyplan.application.money_plan_service import MoneyPlanService
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import (
     BucketConfig, 
@@ -180,7 +180,7 @@ class Query:
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         if plan_id:
             try:
@@ -199,7 +199,7 @@ class Query:
         """
         List all Money Plans.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         plan_ids = service.list_plans()
         
         plans = []
@@ -221,7 +221,7 @@ class Mutation:
         """
         Start a new Money Plan.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             default_allocations = None
@@ -252,7 +252,7 @@ class Mutation:
         """
         Allocate funds to a bucket within an account.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             service.allocate_funds(
@@ -278,7 +278,7 @@ class Mutation:
         """
         Reverse a previous allocation and apply a corrected amount.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             service.reverse_allocation(
@@ -305,7 +305,7 @@ class Mutation:
         """
         Adjust the overall plan balance.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             service.adjust_plan_balance(
@@ -330,7 +330,7 @@ class Mutation:
         """
         Change the bucket configuration for an account.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             bucket_configs = [config.to_domain() for config in input.new_bucket_config]
@@ -357,7 +357,7 @@ class Mutation:
         """
         Add an account to a Money Plan.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             buckets = None
@@ -386,7 +386,7 @@ class Mutation:
         """
         Commit a Money Plan.
         """
-        service = MoneyPlanService()
+        service = apps.get_app_config("money_plans").money_planner
         
         try:
             service.commit_plan(plan_id=UUID(input.plan_id))

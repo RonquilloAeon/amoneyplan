@@ -3,6 +3,7 @@ repos:
     rev: v0.9.9
     hooks:
       - id: ruff-format
+        args: [backend]
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--fix, --exit-non-zero-on-fix, backend]
         types_or: [python, pyi]

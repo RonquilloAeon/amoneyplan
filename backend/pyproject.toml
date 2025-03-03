@@ -33,6 +33,11 @@ python_files = "test_*.py"
 django_find_project = true
 
 [tool.ruff]
-line-length = 100
-target-version = "py310"
+line-length = 110
+target-version = "py313"
+
+[tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.pycodestyle]
+ignore-overlong-task-comments = true

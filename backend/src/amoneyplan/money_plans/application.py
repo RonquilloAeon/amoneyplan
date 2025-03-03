@@ -56,9 +56,7 @@ class MoneyPlanner(Application):
 
         # Create new plan
         plan = MoneyPlan()
-        plan.start_plan(
-            initial_balance=initial_balance, default_allocations=default_allocations, notes=notes
-        )
+        plan.start_plan(initial_balance=initial_balance, default_allocations=default_allocations, notes=notes)
 
         # Save the plan
         self.save(plan)
@@ -208,9 +206,7 @@ class MoneyPlanner(Application):
             AccountNotFoundError: If the account doesn't exist
         """
         plan = self.get_plan(plan_id)
-        plan.change_account_configuration(
-            account_id=account_id, new_bucket_config=new_bucket_config
-        )
+        plan.change_account_configuration(account_id=account_id, new_bucket_config=new_bucket_config)
         self.save(plan)
 
     def commit_plan(self, plan_id: UUID) -> None:

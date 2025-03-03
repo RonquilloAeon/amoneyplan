@@ -1,8 +1,8 @@
 """
 GraphQL schema for the Money Plan API.
 """
-import decimal
-from typing import List, Optional, Dict, Union
+
+from typing import List, Optional
 from uuid import UUID
 
 import strawberry
@@ -10,16 +10,7 @@ from django.apps import apps
 from strawberry.types import Info
 
 from amoneyplan.domain.money import Money
-from amoneyplan.domain.money_plan import (
-    BucketConfig, 
-    AccountAllocationConfig,
-    MoneyPlanError,
-    InsufficientFundsError,
-    PlanAlreadyCommittedError,
-    BucketNotFoundError,
-    AccountNotFoundError,
-    InvalidPlanStateError
-)
+from amoneyplan.domain.money_plan import AccountAllocationConfig, BucketConfig, MoneyPlanError
 
 
 # GraphQL output types
@@ -34,7 +25,7 @@ class Bucket:
         return Bucket(
             bucket_name=domain_bucket.bucket_name,
             category=domain_bucket.category,
-            allocated_amount=domain_bucket.allocated_amount.as_float
+            allocated_amount=domain_bucket.allocated_amount.as_float,
         )
 
 
@@ -49,9 +40,7 @@ class Account:
         return Account(
             account_id=str(domain_account.account_id),
             account_name=domain_account.account_name,
-            buckets=[
-                Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()
-            ]
+            buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
         )
 
 
@@ -72,12 +61,11 @@ class MoneyPlan:
             initial_balance=domain_plan.initial_balance.as_float,
             remaining_balance=domain_plan.remaining_balance.as_float,
             accounts=[
-                Account.from_domain(allocation.account) 
-                for allocation in domain_plan.accounts.values()
+                Account.from_domain(allocation.account) for allocation in domain_plan.accounts.values()
             ],
             notes=domain_plan.notes,
             committed=domain_plan.committed,
-            timestamp=domain_plan.timestamp.isoformat() if domain_plan.timestamp else None
+            timestamp=domain_plan.timestamp.isoformat() if domain_plan.timestamp else None,
         )
 
 
@@ -104,7 +92,7 @@ class BucketConfigInput:
         return BucketConfig(
             bucket_name=self.bucket_name,
             category=self.category,
-            allocated_amount=Money(self.allocated_amount)
+            allocated_amount=Money(self.allocated_amount),
         )
 
 
@@ -118,7 +106,7 @@ class AccountAllocationConfigInput:
         return AccountAllocationConfig(
             account_id=UUID(self.account_id) if self.account_id else UUID(),
             account_name=self.account_name,
-            buckets=[bucket.to_domain() for bucket in self.buckets]
+            buckets=[bucket.to_domain() for bucket in self.buckets],
         )
 
 
@@ -181,7 +169,7 @@ class Query:
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         if plan_id:
             try:
                 plan = service.get_plan(UUID(plan_id))
@@ -201,7 +189,7 @@ class Query:
         """
         service = apps.get_app_config("money_plans").money_planner
         plan_ids = service.list_plans()
-        
+
         plans = []
         for plan_id in plan_ids:
             try:
@@ -209,7 +197,7 @@ class Query:
                 plans.append(MoneyPlan.from_domain(plan))
             except KeyError:
                 continue
-                
+
         return plans
 
 
@@ -222,30 +210,22 @@ class Mutation:
         Start a new Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             default_allocations = None
             if input.default_allocations:
-                default_allocations = [
-                    config.to_domain() for config in input.default_allocations
-                ]
-                
+                default_allocations = [config.to_domain() for config in input.default_allocations]
+
             plan_id = service.create_plan(
                 initial_balance=input.initial_balance,
                 default_allocations=default_allocations,
-                notes=input.notes
+                notes=input.notes,
             )
-            
+
             plan = service.get_plan(plan_id)
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except Exception as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
     def allocate_funds(self, info: Info, input: AllocateFundsInput) -> PlanResult:
@@ -253,25 +233,19 @@ class Mutation:
         Allocate funds to a bucket within an account.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             service.allocate_funds(
                 plan_id=UUID(input.plan_id),
                 account_id=input.account_id,
                 bucket_name=input.bucket_name,
-                amount=input.amount
+                amount=input.amount,
             )
-            
+
             plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
     def reverse_allocation(self, info: Info, input: ReverseAllocationInput) -> PlanResult:
@@ -279,26 +253,20 @@ class Mutation:
         Reverse a previous allocation and apply a corrected amount.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             service.reverse_allocation(
                 plan_id=UUID(input.plan_id),
                 account_id=input.account_id,
                 bucket_name=input.bucket_name,
                 original_amount=input.original_amount,
-                corrected_amount=input.corrected_amount
+                corrected_amount=input.corrected_amount,
             )
-            
+
             plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
     def adjust_plan_balance(self, info: Info, input: PlanBalanceAdjustInput) -> PlanResult:
@@ -306,24 +274,16 @@ class Mutation:
         Adjust the overall plan balance.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             service.adjust_plan_balance(
-                plan_id=UUID(input.plan_id),
-                adjustment=input.adjustment,
-                reason=input.reason
+                plan_id=UUID(input.plan_id), adjustment=input.adjustment, reason=input.reason
             )
-            
+
             plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
     def change_account_configuration(self, info: Info, input: AccountConfigurationChangeInput) -> PlanResult:
@@ -331,26 +291,20 @@ class Mutation:
         Change the bucket configuration for an account.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             bucket_configs = [config.to_domain() for config in input.new_bucket_config]
-            
+
             service.change_account_configuration(
                 plan_id=UUID(input.plan_id),
                 account_id=input.account_id,
-                new_bucket_config=bucket_configs
+                new_bucket_config=bucket_configs,
             )
-            
+
             plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
     def add_account(self, info: Info, input: AddAccountInput) -> PlanResult:
@@ -358,28 +312,20 @@ class Mutation:
         Add an account to a Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             buckets = None
             if input.buckets:
                 buckets = [bucket.to_domain() for bucket in input.buckets]
-                
-            account_id = service.add_account(
-                plan_id=UUID(input.plan_id),
-                account_name=input.account_name,
-                buckets=buckets
+
+            _ = service.add_account(
+                plan_id=UUID(input.plan_id), account_name=input.account_name, buckets=buckets
             )
-            
+
             plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
     def commit_plan(self, info: Info, input: CommitPlanInput) -> PlanResult:
@@ -387,20 +333,14 @@ class Mutation:
         Commit a Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
-        
+
         try:
             service.commit_plan(plan_id=UUID(input.plan_id))
-            
+
             plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(
-                money_plan=MoneyPlan.from_domain(plan),
-                success=True
-            )
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(
-                error=Error(message=str(e)),
-                success=False
-            )
+            return PlanResult(error=Error(message=str(e)), success=False)
 
 
 # Create the GraphQL schema

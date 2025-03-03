@@ -25,6 +25,6 @@ def mypy(session: Session) -> None:
 @nox.session(python="3.13", reuse_venv=True)
 def test(session: Session) -> None:
     """Run the test suite."""
-    args = session.posargs or ["--cov=amoneyplan", "-v"]
+    args = session.posargs or ["--cov=amoneyplan", "-v"] + locations
     session.run_always("poetry", "install", "--no-root", external=True)
     session.run("pytest", *args)

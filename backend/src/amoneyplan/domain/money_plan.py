@@ -81,7 +81,7 @@ class MoneyPlan(Aggregate):
         self.committed = False
         self.timestamp = None
 
-    @event
+    @event("PlanStarted")
     def start_plan(
         self,
         initial_balance: Union[Money, float, str],
@@ -128,7 +128,7 @@ class MoneyPlan(Aggregate):
                 # Add the account allocation to the plan
                 self.accounts[account.account_id] = PlanAccountAllocation(account=account)
 
-    @event
+    @event("FundsAllocated")
     def allocate_funds(
         self, account_id: Union[UUID, str], bucket_name: str, amount: Union[Money, float, str]
     ):
@@ -179,7 +179,7 @@ class MoneyPlan(Aggregate):
         # Reduce the remaining balance
         self.remaining_balance -= amount
 
-    @event
+    @event("AllocationReversed")
     def reverse_allocation(
         self,
         account_id: Union[UUID, str],
@@ -239,7 +239,7 @@ class MoneyPlan(Aggregate):
         bucket.allocated_amount += net_adjustment
         self.remaining_balance -= net_adjustment
 
-    @event
+    @event("PlanBalanceAdjusted")
     def adjust_plan_balance(self, adjustment: Union[Money, float, str], reason: str = ""):
         """
         Adjust the overall plan balance.
@@ -261,7 +261,7 @@ class MoneyPlan(Aggregate):
         self.initial_balance += adjustment
         self.remaining_balance += adjustment
 
-    @event
+    @event("AccountConfigurationChanged")
     def change_account_configuration(
         self, account_id: Union[UUID, str], new_bucket_config: List[BucketConfig]
     ):
@@ -312,7 +312,7 @@ class MoneyPlan(Aggregate):
         account.buckets = new_buckets
         self.remaining_balance += adjustment
 
-    @event
+    @event("PlanCommitted")
     def commit_plan(self):
         """
         Commit the money plan, finalizing the allocations.
@@ -354,7 +354,7 @@ class MoneyPlan(Aggregate):
         # All invariants satisfied, commit the plan
         self.committed = True
 
-    @event
+    @event("AccountAdded")
     def add_account(self, account_name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
         """
         Add a new account to the plan.

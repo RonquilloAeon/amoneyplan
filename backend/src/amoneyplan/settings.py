@@ -155,7 +155,5 @@ CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "Strict"
 # Event Sourcing configuration
 EVENT_SOURCING_SETTINGS = {
     "PERSISTENCE_MODULE": "eventsourcing_django",
-    "DJANGO_EVENT_STORE_APP_NAME": "eventsourcing_django",
     "SNAPSHOT_THRESHOLD": 50,  # Take snapshots after 50 events
-    "INFRASTRUCTURE_FACTORY": "eventsourcing_django.factory.DjangoInfrastructureFactory",
 }

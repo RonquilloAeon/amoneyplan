@@ -1,9 +1,8 @@
-from . import Entity
 from .account import Account
 from .money import Money
 
 
-class Entry(Entity):
+class Entry:
     def __init__(self, id: str, from_account: Account, to_account: Account, amount: Money):
         super().__init__(id)
         self._from_account = from_account

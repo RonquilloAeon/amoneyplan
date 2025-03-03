@@ -23,6 +23,8 @@ class MoneyPlanner(Application):
     Uses the eventsourcing library to persist and retrieve Money Plans.
     """
 
+    name = "money_planner"
+
     # The current active money plan being worked on
     current_plan_id: Optional[UUID] = None
 
@@ -231,7 +233,10 @@ class MoneyPlanner(Application):
         Returns:
             A list of Money Plan IDs
         """
-        return self.repository.get_entity_ids()
+        # Query for initial events of money plans
+        return self.events.recorder.model.objects.filter(
+            application_name=self.name, originator_version=1
+        ).values_list("originator_id", flat=True)
 
     # Notification handlers for processing events
     def policy(self, domain_event: ProcessingEvent, process_event) -> None:

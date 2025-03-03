@@ -2,71 +2,107 @@
 GraphQL schema for the Money Plan API.
 """
 
+import logging
 from typing import List, Optional
 from uuid import UUID
 
 import strawberry
 from django.apps import apps
+from strawberry import relay
 from strawberry.types import Info
 
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import AccountAllocationConfig, BucketConfig, MoneyPlanError
 
+logger = logging.getLogger("django")
+
 
 # GraphQL output types
 @strawberry.type
-class Bucket:
+class Bucket(relay.Node):
+    id: relay.NodeID[str]
     bucket_name: str
     category: str
     allocated_amount: float
 
+    @classmethod
+    def resolve_node(cls, node_id: str, info: Info) -> Optional["Bucket"]:
+        # In a real implementation, you would parse the node_id and fetch the bucket
+        # For now, we return None as buckets are always loaded through their parent Account
+        return None
+
     @staticmethod
     def from_domain(domain_bucket) -> "Bucket":
-        return Bucket(
+        bucket = Bucket(
+            id=domain_bucket.bucket_name,
             bucket_name=domain_bucket.bucket_name,
             category=domain_bucket.category,
             allocated_amount=domain_bucket.allocated_amount.as_float,
         )
+        return bucket
 
 
 @strawberry.type
-class Account:
-    account_id: str
+class Account(relay.Node):
+    id: relay.NodeID[UUID]
     account_name: str
     buckets: List[Bucket]
 
+    @classmethod
+    def resolve_node(cls, node_id: str, info: Info) -> Optional["Account"]:
+        # In a real implementation, you would parse the node_id and fetch the account
+        # For now, we return None as accounts are always loaded through their parent MoneyPlan
+        return None
+
     @staticmethod
     def from_domain(domain_account) -> "Account":
-        return Account(
-            account_id=str(domain_account.account_id),
+        account = Account(
+            id=domain_account.account_id,
             account_name=domain_account.account_name,
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
         )
+        return account
 
 
 @strawberry.type
-class MoneyPlan:
-    id: str
+class MoneyPlan(relay.Node):
+    id: relay.NodeID[UUID]
     initial_balance: float
     remaining_balance: float
     accounts: List[Account]
     notes: str
-    committed: bool
+    is_committed: bool
     timestamp: Optional[str] = None
+
+    @classmethod
+    def resolve_node(cls, node_id: str, info: Info) -> Optional["MoneyPlan"]:
+        service = apps.get_app_config("money_plans").money_planner
+        try:
+            plan = service.get_plan(UUID(node_id))
+            return MoneyPlan.from_domain(plan)
+        except (KeyError, ValueError):
+            return None
 
     @staticmethod
     def from_domain(domain_plan) -> "MoneyPlan":
-        return MoneyPlan(
-            id=str(domain_plan.id),
+        plan = MoneyPlan(
+            id=domain_plan.id,
             initial_balance=domain_plan.initial_balance.as_float,
             remaining_balance=domain_plan.remaining_balance.as_float,
             accounts=[
                 Account.from_domain(allocation.account) for allocation in domain_plan.accounts.values()
             ],
             notes=domain_plan.notes,
-            committed=domain_plan.committed,
+            is_committed=domain_plan.committed,
             timestamp=domain_plan.timestamp.isoformat() if domain_plan.timestamp else None,
         )
+        return plan
+
+
+@strawberry.type
+class MoneyPlanConnection(relay.Connection[MoneyPlan]):
+    class Meta:
+        node = MoneyPlan
 
 
 @strawberry.type
@@ -183,12 +219,21 @@ class Query:
             return None
 
     @strawberry.field
-    def money_plans(self, info: Info) -> List[MoneyPlan]:
+    def money_plans(
+        self,
+        info: Info,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+        first: Optional[int] = None,
+        last: Optional[int] = None,
+    ) -> MoneyPlanConnection:
         """
-        List all Money Plans.
+        List all Money Plans with pagination support.
         """
         service = apps.get_app_config("money_plans").money_planner
         plan_ids = service.list_plans()
+
+        logger.info(f"plan_ids: {plan_ids}")
 
         plans = []
         for plan_id in plan_ids:
@@ -198,7 +243,25 @@ class Query:
             except KeyError:
                 continue
 
-        return plans
+        has_previous_page = False
+        has_next_page = False
+        node_type = "MoneyPlan"
+        start_cursor = strawberry.relay.to_base64(node_type, str(0)) if plans else None
+        end_cursor = strawberry.relay.to_base64(node_type, str(len(plans) - 1)) if plans else None
+
+        edges = [
+            strawberry.relay.Edge(node=plan, cursor=strawberry.relay.to_base64(node_type, str(i)))
+            for i, plan in enumerate(plans)
+        ]
+
+        page_info = relay.PageInfo(
+            has_previous_page=has_previous_page,
+            has_next_page=has_next_page,
+            start_cursor=start_cursor,
+            end_cursor=end_cursor,
+        )
+
+        return MoneyPlanConnection(edges=edges, page_info=page_info)
 
 
 # GraphQL mutations

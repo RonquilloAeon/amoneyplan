@@ -2,7 +2,7 @@
 Management command to initialize the database for the Money Plan app.
 """
 
-from backend.src.amoneyplan.money_plans.application import MoneyPlanService
+from django.apps import apps
 from django.core.management.base import BaseCommand
 
 
@@ -49,7 +49,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating sample Money Plan...")
 
         try:
-            service = MoneyPlanService()
+            service = apps.get_app_config("money_plans").money_planner
 
             # Create a new plan with initial balance
             plan_id = service.create_plan(initial_balance=1000.00, notes="Sample Money Plan for testing")

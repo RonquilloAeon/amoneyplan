@@ -266,7 +266,7 @@ class Query:
 
 # GraphQL mutations
 @strawberry.type
-class Mutation:
+class MoneyPlanMutations:
     @strawberry.mutation
     def start_plan(self, info: Info, input: PlanStartInput) -> PlanResult:
         """
@@ -404,6 +404,13 @@ class Mutation:
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
+
+
+@strawberry.type
+class Mutation:
+    @strawberry.field
+    def money_plan(self, info: Info) -> MoneyPlanMutations:
+        return MoneyPlanMutations()
 
 
 # Create the GraphQL schema

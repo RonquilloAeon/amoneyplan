@@ -128,28 +128,25 @@ class MoneyPlanner(Application):
 
         return self.get_plan(self.current_plan_id)
 
-    def add_account(
-        self, plan_id: UUID, account_name: str, buckets: Optional[List[BucketConfig]] = None
-    ) -> UUID:
+    def add_account(self, plan_id: UUID, name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
         """
-        Add an account to a Money Plan.
+        Add a new account to a plan.
 
         Args:
-            plan_id: The ID of the plan
-            account_name: The name of the account
+            plan_id: The ID of the plan to add the account to
+            name: The name of the account
             buckets: Optional list of bucket configurations
 
         Returns:
             The ID of the new account
 
         Raises:
-            PlanAlreadyCommittedError: If the plan is already committed
+            KeyError: If the plan ID doesn't exist
+            MoneyPlanError: If there's an error adding the account
         """
+        logger.info("Adding account %s to plan %s", name, plan_id)
         plan = self.get_plan(plan_id)
-
-        logger.info("Adding account %s to plan %s", account_name, plan_id)
-
-        account_id = plan.add_account(account_name=account_name, buckets=buckets)
+        account_id = plan.add_account(name=name, buckets=buckets)
         self.save(plan)
         return account_id
 

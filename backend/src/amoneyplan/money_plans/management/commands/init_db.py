@@ -57,7 +57,7 @@ class Command(BaseCommand):
             # Add some accounts and buckets
             service.add_account(
                 plan_id=plan_id,
-                account_name="Checking Account",
+                name="Checking Account",
                 buckets=[
                     {"bucket_name": "Bills", "category": "Expenses", "allocated_amount": 500.00},
                     {"bucket_name": "Food", "category": "Expenses", "allocated_amount": 200.00},
@@ -66,7 +66,7 @@ class Command(BaseCommand):
 
             service.add_account(
                 plan_id=plan_id,
-                account_name="Savings Account",
+                name="Savings Account",
                 buckets=[
                     {
                         "bucket_name": "Emergency Fund",

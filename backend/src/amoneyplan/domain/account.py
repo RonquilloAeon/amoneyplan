@@ -32,16 +32,16 @@ class Account:
     """
 
     account_id: UUID
-    account_name: str
+    name: str
     buckets: Dict[str, Bucket] = field(default_factory=dict)
 
     @classmethod
-    def create(cls, account_name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
+    def create(cls, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
         """
         Factory method to create a new account with a generated UUID.
-        If no buckets are provided, creates a default bucket.
+        If no buckets provided, creates a default bucket.
         """
-        account = cls(account_id=uuid4(), account_name=account_name, buckets={})
+        account = cls(account_id=uuid4(), name=name, buckets={})
 
         # If no buckets provided, create a default one
         if not buckets:
@@ -81,7 +81,7 @@ class Account:
         return total
 
     def __str__(self) -> str:
-        return f"{self.account_name} ({len(self.buckets)} buckets)"
+        return f"{self.name} ({len(self.buckets)} buckets)"
 
 
 @dataclass

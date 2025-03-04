@@ -45,7 +45,7 @@ class Bucket(relay.Node):
 @strawberry.type
 class Account(relay.Node):
     id: relay.NodeID[UUID]
-    account_name: str
+    name: str
     buckets: List[Bucket]
 
     @classmethod
@@ -58,7 +58,7 @@ class Account(relay.Node):
     def from_domain(domain_account) -> "Account":
         account = Account(
             id=domain_account.account_id,
-            account_name=domain_account.account_name,
+            name=domain_account.name,
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
         )
         return account
@@ -135,13 +135,13 @@ class BucketConfigInput:
 @strawberry.input
 class AccountAllocationConfigInput:
     account_id: Optional[str] = None
-    account_name: str
+    name: str
     buckets: List[BucketConfigInput]
 
     def to_domain(self) -> AccountAllocationConfig:
         return AccountAllocationConfig(
             account_id=UUID(self.account_id) if self.account_id else UUID(),
-            account_name=self.account_name,
+            account_name=self.name,
             buckets=[bucket.to_domain() for bucket in self.buckets],
         )
 
@@ -187,7 +187,7 @@ class AccountConfigurationChangeInput:
 @strawberry.input
 class AddAccountInput:
     plan_id: relay.GlobalID
-    account_name: str
+    name: str
     buckets: Optional[List[BucketConfigInput]] = None
 
 
@@ -200,15 +200,17 @@ class CommitPlanInput:
 @strawberry.type
 class Query:
     @strawberry.field
-    def money_plan(self, info: Info, plan_id: Optional[str] = None) -> Optional[MoneyPlan]:
+    def money_plan(self, info: Info, plan_id: Optional[relay.GlobalID] = None) -> Optional[MoneyPlan]:
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
         service = apps.get_app_config("money_plans").money_planner
 
         if plan_id:
+            plan_id = UUID(plan_id.node_id)
+
             try:
-                plan = service.get_plan(UUID(plan_id))
+                plan = service.get_plan(plan_id)
                 return MoneyPlan.from_domain(plan)
             except (KeyError, ValueError):
                 return None
@@ -375,8 +377,8 @@ class MoneyPlanMutations:
         Add an account to a Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
-        plan_id = input.plan_id.node_id
-        logger.info(f"Adding account '{input.account_name}' to plan {plan_id}")
+        plan_id = UUID(input.plan_id.node_id)
+        logger.info(f"Adding account '{input.name}' to plan {plan_id}")
 
         try:
             buckets = None
@@ -386,9 +388,7 @@ class MoneyPlanMutations:
             else:
                 logger.info("No buckets specified, will use default bucket")
 
-            account_id = service.add_account(
-                plan_id=plan_id, account_name=input.account_name, buckets=buckets
-            )
+            account_id = service.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
             logger.info(f"Account created with ID: {account_id}")
 
             plan = service.get_plan(plan_id)
@@ -406,9 +406,10 @@ class MoneyPlanMutations:
         service = apps.get_app_config("money_plans").money_planner
 
         try:
-            service.commit_plan(plan_id=UUID(input.plan_id))
+            plan_id = UUID(input.plan_id.node_id)
+            service.commit_plan(plan_id=plan_id)
 
-            plan = service.get_plan(UUID(input.plan_id))
+            plan = service.get_plan(plan_id)
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)

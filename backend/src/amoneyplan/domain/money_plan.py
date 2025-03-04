@@ -60,11 +60,13 @@ class BucketConfig:
 
 @dataclass
 class AccountAllocationConfig:
-    """Configuration for an account allocation."""
+    """
+    Configuration for an account allocation in a Money Plan.
+    """
 
     account_id: UUID
-    account_name: str
-    buckets: List[BucketConfig] = field(default_factory=list)
+    name: str
+    buckets: List[BucketConfig]
 
 
 class MoneyPlan(Aggregate):
@@ -108,7 +110,7 @@ class MoneyPlan(Aggregate):
         # Process default allocations if provided
         if default_allocations:
             for config in default_allocations:
-                account = Account(account_id=config.account_id, account_name=config.account_name)
+                account = Account(account_id=config.account_id, account_name=config.name)
 
                 # Add buckets to the account
                 if config.buckets:
@@ -171,7 +173,7 @@ class MoneyPlan(Aggregate):
         # Find the bucket
         bucket = account.get_bucket(bucket_name)
         if not bucket:
-            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.account_name}'")
+            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.name}'")
 
         # Update the bucket's allocation
         bucket.allocated_amount += amount
@@ -224,7 +226,7 @@ class MoneyPlan(Aggregate):
         # Find the bucket
         bucket = account.get_bucket(bucket_name)
         if not bucket:
-            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.account_name}'")
+            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.name}'")
 
         # Calculate the net adjustment
         net_adjustment = corrected_amount - original_amount
@@ -333,7 +335,7 @@ class MoneyPlan(Aggregate):
         for account_id, allocation in self.accounts.items():
             if not allocation.account.buckets:
                 raise InvalidPlanStateError(
-                    f"Account '{allocation.account.account_name}' must have at least one bucket"
+                    f"Account '{allocation.account.name}' must have at least one bucket"
                 )
 
         # 3. Sum of all bucket allocations must equal the initial balance
@@ -355,12 +357,12 @@ class MoneyPlan(Aggregate):
         self.committed = True
 
     @event("AccountAdded")
-    def add_account(self, account_name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
+    def add_account(self, name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
         """
         Add a new account to the plan.
 
         Args:
-            account_name: The name of the account
+            name: The name of the account
             buckets: Optional list of bucket configurations
 
         Returns:
@@ -373,7 +375,7 @@ class MoneyPlan(Aggregate):
             raise PlanAlreadyCommittedError("Cannot add an account to a committed plan")
 
         # Create the account
-        account = Account.create(account_name=account_name)
+        account = Account.create(name=name)
 
         # Add buckets if provided
         if buckets:

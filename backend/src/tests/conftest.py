@@ -22,19 +22,41 @@ def pytest_configure():
             }
         },
         INSTALLED_APPS=[
-            "django.contrib.contenttypes",
+            "django.contrib.admin",
             "django.contrib.auth",
+            "django.contrib.contenttypes",
+            "django.contrib.sessions",
+            "django.contrib.messages",
+            "django.contrib.staticfiles",
+            "strawberry.django",
+            "eventsourcing_django",
             "amoneyplan.money_plans",
             "amoneyplan.eventsourcing_runner",
             "amoneyplan.api",
         ],
-        MIDDLEWARE=[],
+        MIDDLEWARE=[
+            "django.contrib.sessions.middleware.SessionMiddleware",
+            "django.contrib.auth.middleware.AuthenticationMiddleware",
+            "django.contrib.messages.middleware.MessageMiddleware",
+        ],
         ROOT_URLCONF="amoneyplan.urls",
         SECRET_KEY="test-key-not-for-production",
         EVENT_SOURCING_SETTINGS={
             "PERSISTENCE_MODULE": "eventsourcing.sqlite",
             "SNAPSHOT_PERIOD": 0,  # Disable snapshots for testing
         },
+        TEMPLATES=[
+            {
+                "BACKEND": "django.template.backends.django.DjangoTemplates",
+                "APP_DIRS": True,
+                "OPTIONS": {
+                    "context_processors": [
+                        "django.contrib.auth.context_processors.auth",
+                        "django.contrib.messages.context_processors.messages",
+                    ],
+                },
+            },
+        ],
     )
     django.setup()
 

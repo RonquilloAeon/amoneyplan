@@ -526,3 +526,75 @@ class TestGraphQLAPI:
         assert edges[0]["node"]["notes"] == "Plan 2"
         assert edges[0]["node"]["isCommitted"] is True
         assert result["moneyPlans"]["pageInfo"]["hasNextPage"] is True
+
+    def test_cannot_create_multiple_uncommitted_plans(self, client, money_planner):
+        """Test that we cannot create multiple uncommitted plans."""
+        # Create first plan
+        create_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    error {
+                        message
+                    }
+                    success
+                    moneyPlan {
+                        id
+                        initialBalance
+                        remainingBalance
+                    }
+                }
+            }
+        }
+        """
+
+        # Create first plan
+        result1 = self.execute_query(
+            client,
+            create_mutation,
+            {"input": {"initialBalance": 1000.0, "notes": "First plan"}},
+        )
+        assert "errors" not in result1
+        assert result1["moneyPlan"]["startPlan"]["success"]
+
+        # Try to create second plan without committing first one
+        result2 = self.execute_query(
+            client,
+            create_mutation,
+            {"input": {"initialBalance": 2000.0, "notes": "Second plan"}},
+        )
+        assert "errors" not in result2
+        assert not result2["moneyPlan"]["startPlan"]["success"]
+        assert "uncommitted plan" in result2["moneyPlan"]["startPlan"]["error"]["message"].lower()
+
+        # Commit first plan
+        commit_mutation = """
+        mutation CommitPlan($input: CommitPlanInput!) {
+            moneyPlan {
+                commitPlan(input: $input) {
+                    success
+                }
+            }
+        }
+        """
+
+        # Add account with full balance to satisfy commit invariants
+        plan1_id = result1["moneyPlan"]["startPlan"]["moneyPlan"]["id"]
+        self.add_account_with_full_balance(client, plan1_id, 1000.0, "Account 1")
+
+        # Now commit the plan
+        commit_result = self.execute_query(
+            client,
+            commit_mutation,
+            {"input": {"planId": plan1_id}},
+        )
+        assert commit_result["moneyPlan"]["commitPlan"]["success"]
+
+        # Now we should be able to create another plan
+        result3 = self.execute_query(
+            client,
+            create_mutation,
+            {"input": {"initialBalance": 2000.0, "notes": "Second plan after commit"}},
+        )
+        assert "errors" not in result3
+        assert result3["moneyPlan"]["startPlan"]["success"]

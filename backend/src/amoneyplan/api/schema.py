@@ -12,7 +12,12 @@ from strawberry import relay
 from strawberry.types import Info
 
 from amoneyplan.domain.money import Money
-from amoneyplan.domain.money_plan import AccountAllocationConfig, BucketConfig, MoneyPlanError
+from amoneyplan.domain.money_plan import (
+    AccountAllocationConfig,
+    BucketConfig,
+    MoneyPlanError,
+    PlanAlreadyCommittedError,
+)
 
 logger = logging.getLogger("amoneyplan")
 
@@ -206,6 +211,9 @@ class Query:
         """
         service = apps.get_app_config("money_plans").money_planner
 
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
+
         if plan_id:
             plan_id = UUID(plan_id.node_id)
 
@@ -234,6 +242,9 @@ class Query:
         """
         try:
             service = apps.get_app_config("money_plans").money_planner
+            # Set user ID from request context
+            service.user_id = str(info.context.request.user.id)
+
             plan_ids = service.list_plans()
             plans = []
 
@@ -244,9 +255,6 @@ class Query:
                 except KeyError:
                     logger.warning(f"Plan {plan_id} not found")
                     continue
-
-            # Sort plans by timestamp (most recent first)
-            plans.sort(key=lambda x: x.timestamp or "", reverse=True)
 
             # Handle pagination
             if after:
@@ -320,6 +328,8 @@ class MoneyPlanMutations:
         Start a new Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             default_allocations = None
@@ -334,7 +344,11 @@ class MoneyPlanMutations:
 
             plan = service.get_plan(plan_id)
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+        except PlanAlreadyCommittedError as e:
+            logger.warning("Cannot create new plan: %s", str(e))
+            return PlanResult(error=Error(message=str(e)), success=False)
         except Exception as e:
+            logger.error("Error creating plan: %s", str(e), exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
@@ -343,6 +357,8 @@ class MoneyPlanMutations:
         Allocate funds to a bucket within an account.
         """
         service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             service.allocate_funds(
@@ -363,6 +379,8 @@ class MoneyPlanMutations:
         Reverse a previous allocation and apply a corrected amount.
         """
         service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             service.reverse_allocation(
@@ -384,6 +402,8 @@ class MoneyPlanMutations:
         Adjust the overall plan balance.
         """
         service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             service.adjust_plan_balance(
@@ -401,6 +421,8 @@ class MoneyPlanMutations:
         Change the bucket configuration for an account.
         """
         service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             bucket_configs = [config.to_domain() for config in input.new_bucket_config]
@@ -424,6 +446,8 @@ class MoneyPlanMutations:
         service = apps.get_app_config("money_plans").money_planner
         plan_id = UUID(input.plan_id.node_id)
         logger.info(f"Adding account '{input.name}' to plan {plan_id}")
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             buckets = None
@@ -449,6 +473,8 @@ class MoneyPlanMutations:
         Commit a Money Plan.
         """
         service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
 
         try:
             plan_id = UUID(input.plan_id.node_id)

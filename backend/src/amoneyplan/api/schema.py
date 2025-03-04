@@ -232,38 +232,83 @@ class Query:
         """
         List all Money Plans with pagination support.
         """
-        service = apps.get_app_config("money_plans").money_planner
-        plan_ids = service.list_plans()
+        try:
+            service = apps.get_app_config("money_plans").money_planner
+            plan_ids = service.list_plans()
+            plans = []
 
-        logger.info(f"plan_ids: {plan_ids}")
+            for plan_id in plan_ids:
+                try:
+                    plan = service.get_plan(plan_id)
+                    plans.append(MoneyPlan.from_domain(plan))
+                except KeyError:
+                    logger.warning(f"Plan {plan_id} not found")
+                    continue
 
-        plans = []
-        for plan_id in plan_ids:
-            try:
-                plan = service.get_plan(plan_id)
-                plans.append(MoneyPlan.from_domain(plan))
-            except KeyError:
-                continue
+            # Sort plans by timestamp (most recent first)
+            plans.sort(key=lambda x: x.timestamp or "", reverse=True)
 
-        has_previous_page = False
-        has_next_page = False
-        node_type = "MoneyPlan"
-        start_cursor = strawberry.relay.to_base64(node_type, str(0)) if plans else None
-        end_cursor = strawberry.relay.to_base64(node_type, str(len(plans) - 1)) if plans else None
+            # Handle pagination
+            if after:
+                after_index = next(
+                    (
+                        i
+                        for i, plan in enumerate(plans)
+                        if str(plan.id) == strawberry.relay.from_base64(after)[1]
+                    ),
+                    0,
+                )
+                plans = plans[after_index + 1 :]
 
-        edges = [
-            strawberry.relay.Edge(node=plan, cursor=strawberry.relay.to_base64(node_type, str(i)))
-            for i, plan in enumerate(plans)
-        ]
+            if before:
+                before_index = next(
+                    (
+                        i
+                        for i, plan in enumerate(plans)
+                        if str(plan.id) == strawberry.relay.from_base64(before)[1]
+                    ),
+                    len(plans),
+                )
+                plans = plans[:before_index]
 
-        page_info = relay.PageInfo(
-            has_previous_page=has_previous_page,
-            has_next_page=has_next_page,
-            start_cursor=start_cursor,
-            end_cursor=end_cursor,
-        )
+            if first:
+                plans = plans[:first]
+            elif last:
+                plans = plans[-last:]
 
-        return MoneyPlanConnection(edges=edges, page_info=page_info)
+            has_next_page = False
+            has_previous_page = False
+
+            if first and len(plans) == first:
+                has_next_page = True
+            if last and len(plans) == last:
+                has_previous_page = True
+
+            edges = [
+                strawberry.relay.Edge(node=plan, cursor=strawberry.relay.to_base64("MoneyPlan", str(plan.id)))
+                for plan in plans
+            ]
+
+            page_info = relay.PageInfo(
+                has_next_page=has_next_page,
+                has_previous_page=has_previous_page,
+                start_cursor=edges[0].cursor if edges else None,
+                end_cursor=edges[-1].cursor if edges else None,
+            )
+
+            return MoneyPlanConnection(edges=edges, page_info=page_info)
+        except Exception as e:
+            logger.error(f"Error fetching money plans: {e}", exc_info=True)
+            # Return an empty connection instead of raising the error
+            return MoneyPlanConnection(
+                edges=[],
+                page_info=relay.PageInfo(
+                    has_next_page=False,
+                    has_previous_page=False,
+                    start_cursor=None,
+                    end_cursor=None,
+                ),
+            )
 
 
 # GraphQL mutations

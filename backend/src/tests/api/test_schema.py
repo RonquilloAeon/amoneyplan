@@ -37,6 +37,63 @@ class TestGraphQLAPI:
         response = client.post("/graphql/", data=data, content_type="application/json")
         return response.json()["data"]  # Extract the data field from the response
 
+    def create_money_plan(self, client: Client, initial_balance: float, notes: str) -> str:
+        """Helper method to create a money plan and return its ID."""
+        create_plan_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    success
+                    moneyPlan {
+                        id
+                    }
+                }
+            }
+        }
+        """
+        variables = {"input": {"initialBalance": initial_balance, "notes": notes}}
+        result = self.execute_query(client, create_plan_mutation, variables)
+        return result["moneyPlan"]["startPlan"]["moneyPlan"]["id"]
+
+    def add_account_with_full_balance(
+        self, client: Client, plan_id: str, initial_balance: float, account_name: str
+    ) -> None:
+        """Helper method to add an account that allocates the full balance."""
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    success
+                }
+            }
+        }
+        """
+        account_variables = {
+            "input": {
+                "planId": plan_id,
+                "name": account_name,
+                "buckets": [
+                    {"bucketName": "Default", "category": "default", "allocatedAmount": initial_balance}
+                ],
+            }
+        }
+        self.execute_query(client, add_account_mutation, account_variables)
+
+    def commit_plan(self, client: Client, plan_id: str) -> bool:
+        """Helper method to commit a plan and return success status."""
+        commit_mutation = """
+        mutation CommitPlan($input: CommitPlanInput!) {
+            moneyPlan {
+                commitPlan(input: $input) {
+                    success
+                }
+            }
+        }
+        """
+        commit_variables = {"input": {"planId": plan_id}}
+        result = self.execute_query(client, commit_mutation, commit_variables)
+        return result["moneyPlan"]["commitPlan"]["success"]
+
     def test_money_plan_query(self, client, money_planner):
         """Test querying a money plan."""
         query = """
@@ -386,3 +443,86 @@ class TestGraphQLAPI:
         assert len(result2["moneyPlan"]["accounts"]) == 1
         assert result2["moneyPlan"]["accounts"][0]["name"] == "Test Account 2"
         assert result2["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 2000.0
+
+    def test_money_plans_query(self, client, money_planner):
+        """Test querying all money plans with pagination."""
+        # Create and commit first plan
+        plan1_id = self.create_money_plan(client, 1000.0, "Plan 1")
+        self.add_account_with_full_balance(client, plan1_id, 1000.0, "Account 1")
+        assert self.commit_plan(client, plan1_id)
+
+        # Create and commit second plan
+        plan2_id = self.create_money_plan(client, 2000.0, "Plan 2")
+        self.add_account_with_full_balance(client, plan2_id, 2000.0, "Account 2")
+        assert self.commit_plan(client, plan2_id)
+
+        # Query all plans
+        query = """
+        query GetMoneyPlans {
+            moneyPlans {
+                edges {
+                    node {
+                        id
+                        initialBalance
+                        notes
+                        isCommitted
+                    }
+                }
+                pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    startCursor
+                    endCursor
+                }
+            }
+        }
+        """
+
+        result = self.execute_query(client, query)
+
+        # Verify the connection structure
+        assert "edges" in result["moneyPlans"]
+        assert "pageInfo" in result["moneyPlans"]
+
+        # Verify we have both plans
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 2
+
+        # Plans should be ordered by creation (most recent first)
+        assert edges[0]["node"]["initialBalance"] == 2000.0
+        assert edges[0]["node"]["notes"] == "Plan 2"
+        assert edges[0]["node"]["isCommitted"] is True
+        assert edges[1]["node"]["initialBalance"] == 1000.0
+        assert edges[1]["node"]["notes"] == "Plan 1"
+        assert edges[1]["node"]["isCommitted"] is True
+
+        # Test pagination
+        query_with_first = """
+        query GetMoneyPlans($first: Int) {
+            moneyPlans(first: $first) {
+                edges {
+                    node {
+                        id
+                        initialBalance
+                        notes
+                        isCommitted
+                    }
+                }
+                pageInfo {
+                    hasNextPage
+                    hasPreviousPage
+                    startCursor
+                    endCursor
+                }
+            }
+        }
+        """
+
+        # Get only the first plan
+        result = self.execute_query(client, query_with_first, {"first": 1})
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 1
+        assert edges[0]["node"]["initialBalance"] == 2000.0
+        assert edges[0]["node"]["notes"] == "Plan 2"
+        assert edges[0]["node"]["isCommitted"] is True
+        assert result["moneyPlans"]["pageInfo"]["hasNextPage"] is True

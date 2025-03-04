@@ -268,10 +268,27 @@ class MoneyPlanner(Application):
         Returns:
             A list of Money Plan IDs
         """
-        # Query for initial events of money plans
-        return self.events.recorder.model.objects.filter(
-            application_name=self.name, originator_version=1
-        ).values_list("originator_id", flat=True)
+        # Use the events store to find all initial events (version 1) for plans
+        plan_ids = set()
+        # Get notifications in batches of 10 (default section size)
+        start = 1
+        while True:
+            try:
+                notifications = list(self.notification_log.select(start=start, limit=10))
+                if not notifications:
+                    break
+
+                for notification in notifications:
+                    if notification.originator_version == 1:
+                        # originator_id is already a UUID, no need to convert
+                        plan_ids.add(notification.originator_id)
+
+                start += len(notifications)
+            except ValueError:
+                # We've reached the end of the log
+                break
+
+        return list(plan_ids)
 
     # Notification handlers for processing events
     def policy(self, domain_event: ProcessingEvent, process_event) -> None:

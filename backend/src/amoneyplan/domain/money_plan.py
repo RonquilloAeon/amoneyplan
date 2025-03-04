@@ -98,11 +98,12 @@ class MoneyPlan(Aggregate):
             default_allocations: Optional list of account allocation configurations
             notes: Free-text notes about this plan
         """
-        if isinstance(initial_balance, (float, str)):
-            initial_balance = Money(initial_balance)
+        balance = (
+            Money(initial_balance) if isinstance(initial_balance, (float, str, int)) else initial_balance
+        )
 
-        self.initial_balance = initial_balance
-        self.remaining_balance = initial_balance
+        self.initial_balance = balance
+        self.remaining_balance = Money(balance.as_float)  # Create a new Money instance
         self.notes = notes
         self.committed = False
         self.timestamp = datetime.utcnow()
@@ -110,7 +111,7 @@ class MoneyPlan(Aggregate):
         # Process default allocations if provided
         if default_allocations:
             for config in default_allocations:
-                account = Account(account_id=config.account_id, account_name=config.name)
+                account = Account(account_id=config.account_id, name=config.name)
 
                 # Add buckets to the account
                 if config.buckets:
@@ -123,9 +124,6 @@ class MoneyPlan(Aggregate):
                         account.buckets[bucket.bucket_name] = bucket
                         # Reduce the remaining balance by the allocated amount
                         self.remaining_balance -= bucket_config.allocated_amount
-                else:
-                    # Add a default bucket if none provided
-                    account.add_bucket("Default", "Default")
 
                 # Add the account allocation to the plan
                 self.accounts[account.account_id] = PlanAccountAllocation(account=account)
@@ -357,13 +355,13 @@ class MoneyPlan(Aggregate):
         self.committed = True
 
     @event("AccountAdded")
-    def add_account(self, name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
+    def add_account(self, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None) -> UUID:
         """
         Add a new account to the plan.
 
         Args:
             name: The name of the account
-            buckets: Optional list of bucket configurations
+            buckets: Optional list of bucket configurations, can be BucketConfig objects or dicts
 
         Returns:
             The ID of the new account
@@ -374,24 +372,44 @@ class MoneyPlan(Aggregate):
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot add an account to a committed plan")
 
-        # Create the account
-        account = Account.create(name=name)
-
-        # Add buckets if provided
+        # Convert BucketConfigs or dicts to Buckets
+        account_buckets = None
         if buckets:
-            for bucket_config in buckets:
-                account.add_bucket(
-                    bucket_name=bucket_config.bucket_name,
-                    category=bucket_config.category,
-                    initial_amount=bucket_config.allocated_amount,
-                )
-                # Reduce remaining balance
-                self.remaining_balance -= bucket_config.allocated_amount
+            account_buckets = []
+            for config in buckets:
+                if isinstance(config, dict):
+                    bucket = Bucket(
+                        bucket_name=config["bucket_name"],
+                        category=config["category"],
+                        allocated_amount=Money(config["allocated_amount"]),
+                    )
+                else:
+                    bucket = Bucket(
+                        bucket_name=config.bucket_name,
+                        category=config.category,
+                        allocated_amount=config.allocated_amount,
+                    )
+                account_buckets.append(bucket)
+
+        # Create the account with buckets (will add default bucket if none provided)
+        account = Account.create(name=name, buckets=account_buckets)
+        account_id = account.account_id
+
+        # Update remaining balance
+        if account_buckets:
+            for bucket in account_buckets:
+                self.remaining_balance -= bucket.allocated_amount
 
         # Add the account to the plan
-        self.accounts[account.account_id] = PlanAccountAllocation(account=account)
+        self.accounts[account_id] = PlanAccountAllocation(account=account)
 
-        return account.account_id
+        # Store the ID so it's available after the event handler
+        self._last_added_account_id = account_id
+        return account_id
+
+    def get_last_added_account_id(self) -> Optional[UUID]:
+        """Get the ID of the last account that was added."""
+        return getattr(self, "_last_added_account_id", None)
 
     def get_total_allocated(self) -> Money:
         """

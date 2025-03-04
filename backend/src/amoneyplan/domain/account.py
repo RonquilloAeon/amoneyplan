@@ -39,17 +39,18 @@ class Account:
     def create(cls, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
         """
         Factory method to create a new account with a generated UUID.
-        If no buckets provided, creates a default bucket.
+        If no buckets are provided or added during creation, creates a default bucket.
         """
         account = cls(account_id=uuid4(), name=name, buckets={})
 
-        # If no buckets provided, create a default one
-        if not buckets:
-            default_bucket = Bucket(bucket_name="Default", category="Default")
-            account.buckets[default_bucket.bucket_name] = default_bucket
-        else:
+        if buckets:
+            # If buckets are provided, use those
             for bucket in buckets:
                 account.buckets[bucket.bucket_name] = bucket
+        else:
+            # Only create default bucket if no buckets were provided
+            default_bucket = Bucket(bucket_name="Default", category="default")
+            account.buckets[default_bucket.bucket_name] = default_bucket
 
         return account
 

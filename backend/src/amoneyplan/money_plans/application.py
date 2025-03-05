@@ -2,10 +2,14 @@
 Application service for managing Money Plans.
 """
 
+import logging
+from dataclasses import asdict
 from typing import List, Optional, Union
 from uuid import UUID
 
-from eventsourcing.application import Application
+from django.core.cache import cache
+from eventsourcing.application import AggregateNotFoundError, Application
+from eventsourcing.persistence import Transcoding
 from eventsourcing.system import ProcessingEvent
 
 from amoneyplan.domain.money import Money
@@ -16,6 +20,36 @@ from amoneyplan.domain.money_plan import (
     PlanAlreadyCommittedError,
 )
 
+logger = logging.getLogger("amoneyplan")
+
+
+def get_current_plan_cache_key(user_id: str) -> str:
+    """Get the cache key for storing the current plan ID for a user."""
+    return f"money_planner_current_plan_id:{user_id}"
+
+
+class BucketConfigTranscoding(Transcoding):
+    """Custom transcoding for BucketConfig class."""
+
+    type = BucketConfig
+    name = "bucket_config"
+
+    def encode(self, obj: BucketConfig) -> dict:
+        """Convert BucketConfig to a dictionary for serialization."""
+        logger.info("Encoding BucketConfig %s", obj)
+
+        data = asdict(obj)
+        data["allocated_amount"] = float(data["allocated_amount"]["amount"])
+        return data
+
+    def decode(self, data: dict) -> BucketConfig:
+        """Convert dictionary to BucketConfig for deserialization."""
+        return BucketConfig(
+            bucket_name=data["bucket_name"],
+            category=data["category"],
+            allocated_amount=Money(data["allocated_amount"]),
+        )
+
 
 class MoneyPlanner(Application):
     """
@@ -23,8 +57,32 @@ class MoneyPlanner(Application):
     Uses the eventsourcing library to persist and retrieve Money Plans.
     """
 
-    # The current active money plan being worked on
-    current_plan_id: Optional[UUID] = None
+    name = "money_planner"
+
+    def __init__(self, env):
+        super().__init__(env)
+        self.user_id = None  # Will be set by the GraphQL context
+
+    def register_transcodings(self, transcoder):
+        super().register_transcodings(transcoder)
+        transcoder.register(BucketConfigTranscoding())
+
+    def _get_current_plan_id(self) -> Optional[UUID]:
+        """Get the current plan ID from cache."""
+        if not self.user_id:
+            return None
+        plan_id = cache.get(get_current_plan_cache_key(self.user_id))
+        return UUID(plan_id) if plan_id else None
+
+    def _set_current_plan_id(self, plan_id: Optional[UUID]) -> None:
+        """Set the current plan ID in cache."""
+        if not self.user_id:
+            return
+        cache_key = get_current_plan_cache_key(self.user_id)
+        if plan_id:
+            cache.set(cache_key, str(plan_id))
+        else:
+            cache.delete(cache_key)
 
     def create_plan(
         self,
@@ -47,20 +105,25 @@ class MoneyPlanner(Application):
             PlanAlreadyCommittedError: If there's an uncommitted plan already
         """
         # Check if there's a current uncommitted plan
-        if self.current_plan_id is not None:
-            plan = self.get_plan(self.current_plan_id)
-            if not plan.committed:
-                raise PlanAlreadyCommittedError(
-                    "There is already an uncommitted plan. Commit it before creating a new one."
-                )
+        current_plan_id = self._get_current_plan_id()
+        if current_plan_id is not None:
+            try:
+                plan = self.get_plan(current_plan_id)
+                if not plan.committed:
+                    raise PlanAlreadyCommittedError(
+                        "There is already an uncommitted plan. Commit it before creating a new one."
+                    )
+            except (KeyError, AggregateNotFoundError):
+                # Plan doesn't exist anymore or isn't found, clear the reference
+                self._set_current_plan_id(None)
 
         # Create new plan
         plan = MoneyPlan()
         plan.start_plan(initial_balance=initial_balance, default_allocations=default_allocations, notes=notes)
 
-        # Save the plan
+        # Save the plan and update current plan ID
         self.save(plan)
-        self.current_plan_id = plan.id
+        self._set_current_plan_id(plan.id)
 
         return plan.id
 
@@ -86,30 +149,40 @@ class MoneyPlanner(Application):
         Returns:
             The current Money Plan, or None if there isn't one
         """
-        if self.current_plan_id is None:
+        current_plan_id = self._get_current_plan_id()
+        if current_plan_id is None:
             return None
 
-        return self.get_plan(self.current_plan_id)
+        try:
+            plan = self.get_plan(current_plan_id)
+            # Clear current plan reference if it's committed
+            if plan.committed:
+                self._set_current_plan_id(None)
+            return plan
+        except KeyError:
+            # Plan doesn't exist anymore
+            self._set_current_plan_id(None)
+            return None
 
-    def add_account(
-        self, plan_id: UUID, account_name: str, buckets: Optional[List[BucketConfig]] = None
-    ) -> UUID:
+    def add_account(self, plan_id: UUID, name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
         """
-        Add an account to a Money Plan.
+        Add a new account to a plan.
 
         Args:
-            plan_id: The ID of the plan
-            account_name: The name of the account
+            plan_id: The ID of the plan to add the account to
+            name: The name of the account
             buckets: Optional list of bucket configurations
 
         Returns:
             The ID of the new account
 
         Raises:
-            PlanAlreadyCommittedError: If the plan is already committed
+            KeyError: If the plan ID doesn't exist
+            MoneyPlanError: If there's an error adding the account
         """
+        logger.info("Adding account %s to plan %s", name, plan_id)
         plan = self.get_plan(plan_id)
-        account_id = plan.add_account(account_name=account_name, buckets=buckets)
+        account_id = plan.add_account(name=name, buckets=buckets)
         self.save(plan)
         return account_id
 
@@ -224,14 +297,42 @@ class MoneyPlanner(Application):
         plan.commit_plan()
         self.save(plan)
 
+        # Clear current plan reference if this was the current plan
+        current_plan_id = self._get_current_plan_id()
+        if current_plan_id == plan_id:
+            self._set_current_plan_id(None)
+
     def list_plans(self) -> List[UUID]:
         """
         List all Money Plan IDs.
 
         Returns:
-            A list of Money Plan IDs
+            A list of Money Plan IDs ordered by creation time (most recent first)
         """
-        return self.repository.get_entity_ids()
+        # Use the events store to find all initial events (version 1) for plans
+        seen_plans = set()  # Track plans we've seen to avoid duplicates
+        plan_ids = []  # Preserve order while avoiding duplicates
+        # Get notifications in batches of 10 (default section size)
+        start = 1
+        while True:
+            try:
+                notifications = list(self.notification_log.select(start=start, limit=10))
+                if not notifications:
+                    break
+
+                # Process notifications in reverse order to get most recent first
+                for notification in reversed(notifications):
+                    if notification.originator_version == 1:  # Initial plan creation event
+                        if notification.originator_id not in seen_plans:
+                            plan_ids.append(notification.originator_id)
+                            seen_plans.add(notification.originator_id)
+
+                start += len(notifications)
+            except ValueError:
+                # We've reached the end of the log
+                break
+
+        return plan_ids
 
     # Notification handlers for processing events
     def policy(self, domain_event: ProcessingEvent, process_event) -> None:

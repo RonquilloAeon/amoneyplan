@@ -25,12 +25,29 @@ pytest = "^8.3.5"
 ruff = "^0.9.9"
 nox = "^2025.2.9"
 pytest-django = "^4.10.0"
+pytest-cov = "^4.1.0"
+mypy = "^1.9.0"
 
 [tool.pytest.ini_options]
 addopts = "-s"
 testpaths = "tests"
 python_files = "test_*.py"
 django_find_project = true
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+]
+show_missing = true
+fail_under = 80
 
 [tool.ruff]
 line-length = 110
@@ -41,3 +58,22 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.pycodestyle]
 ignore-overlong-task-comments = true
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false

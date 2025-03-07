@@ -1,23 +1,45 @@
 <template>
-  <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-1/3">
-      <h2 class="text-2xl font-semibold mb-4">Start New Plan</h2>
+  <dialog id="start-plan-modal" class="modal modal-open">
+    <div class="modal-box relative w-11/12 max-w-sm md:max-w-md">
+      <h3 class="font-bold text-base md:text-lg mb-3 md:mb-4">Start New Plan</h3>
+      
       <form @submit.prevent="startPlan">
-        <div class="mb-4">
-          <label for="initialBalance" class="block text-sm font-medium text-gray-700">Initial Balance</label>
-          <input v-model="initialBalance" type="number" id="initialBalance" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required />
+        <div class="form-control w-full mb-3 md:mb-4">
+          <label class="label py-1">
+            <span class="label-text text-sm md:text-base">Initial Balance</span>
+          </label>
+          <input 
+            v-model="initialBalance" 
+            type="number" 
+            class="input input-bordered input-sm md:input-md w-full" 
+            required 
+          />
         </div>
-        <div class="mb-4">
-          <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
-          <textarea v-model="notes" id="notes" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required></textarea>
+        
+        <div class="form-control w-full mb-4 md:mb-6">
+          <label class="label py-1">
+            <span class="label-text text-sm md:text-base">Notes</span>
+          </label>
+          <textarea 
+            v-model="notes" 
+            class="textarea textarea-bordered textarea-sm md:textarea-md h-16 md:h-24 text-sm md:text-base" 
+            required
+          ></textarea>
         </div>
-        <div class="flex justify-end">
-          <button type="button" @click="$emit('close')" class="px-4 py-2 bg-gray-500 text-white rounded-md mr-2">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-md">Start Plan</button>
+        
+        <div class="modal-action">
+          <button type="button" @click="$emit('close')" class="btn btn-ghost btn-sm md:btn-md">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm md:btn-md">Start Plan</button>
         </div>
       </form>
+      <form method="dialog">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="$emit('close')">✕</button>
+      </form>
     </div>
-  </div>
+    <form method="dialog" class="modal-backdrop">
+      <button @click="$emit('close')">close</button>
+    </form>
+  </dialog>
 </template>
 
 <script setup lang="ts">

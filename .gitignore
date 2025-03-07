@@ -2,8 +2,9 @@
 .postgres-data/
 *.pyc
 __pycache__/
-.env
+node_modules/
 .venv/
+.env
 
 # IDE
 .idea/

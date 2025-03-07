@@ -4,6 +4,7 @@ import App from './App.vue';
 import urql, { cacheExchange, fetchExchange } from '@urql/vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import IndexPage from './pages/index.vue';
+import PlansPage from './pages/plans.vue';
 
 const app = createApp(App);
 
@@ -13,7 +14,8 @@ app.use(urql, {
 });
 
 const routes = [
-  { path: '/', component: IndexPage }
+  { path: '/', component: IndexPage },
+  { path: '/plans', component: PlansPage }
 ];
 
 const router = createRouter({

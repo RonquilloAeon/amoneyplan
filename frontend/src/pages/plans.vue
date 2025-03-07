@@ -1,15 +1,33 @@
 <template>
   <div class="min-h-screen bg-base-200">
-    <!-- Hero section with title -->
+    <!-- Page Header -->
     <PageHeader 
-      title="Money Plans"
-      subtitle="Manage your finances with smart money plans"
+      title="All Money Plans"
+      subtitle="View and manage all your money plans"
       :centered="true"
     />
 
     <div class="container mx-auto pb-8">
-      <!-- Action Button with responsive positioning -->
-      <div class="flex justify-center sm:justify-end mb-4 px-4">
+      <!-- Filter/Sort Controls -->
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 px-4">
+        <div class="flex gap-2">
+          <button @click="filterStatus = 'all'" 
+                  class="btn btn-sm" 
+                  :class="filterStatus === 'all' ? 'btn-primary' : 'btn-outline'">
+            All
+          </button>
+          <button @click="filterStatus = 'draft'" 
+                  class="btn btn-sm" 
+                  :class="filterStatus === 'draft' ? 'btn-primary' : 'btn-outline'">
+            Drafts
+          </button>
+          <button @click="filterStatus = 'committed'" 
+                  class="btn btn-sm" 
+                  :class="filterStatus === 'committed' ? 'btn-primary' : 'btn-outline'">
+            Committed
+          </button>
+        </div>
+        
         <button @click="showStartPlanDialog = true" class="btn btn-primary btn-sm md:btn-md">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -18,26 +36,27 @@
         </button>
       </div>
       
-      <!-- Money Plans List with responsive grid -->
+      <!-- Plans List -->
       <div class="grid gap-4 md:gap-6 px-3">
-        <!-- Show draft plan if exists -->
-        <MoneyPlanCard 
-          v-if="draftPlan" 
-          :plan="draftPlan" 
-        />
-        
-        <!-- Empty state when no draft plans -->
-        <div v-if="!draftPlan" class="card bg-base-100 shadow-xl">
+        <!-- Empty state when no plans -->
+        <div v-if="filteredPlans.length === 0" class="card bg-base-100 shadow-xl">
           <div class="card-body text-center py-6 md:py-10">
-            <h2 class="card-title justify-center text-lg md:text-xl">No Draft Plans</h2>
-            <p class="text-sm md:text-base">Click the "Start New Plan" button to create a new plan.</p>
-            <div class="mt-4">
-              <RouterLink to="/plans" class="btn btn-outline btn-sm md:btn-md">
-                View All Plans
-              </RouterLink>
-            </div>
+            <h2 class="card-title justify-center text-lg md:text-xl">No Money Plans Found</h2>
+            <p class="text-sm md:text-base" v-if="filterStatus !== 'all'">
+              No {{ filterStatus }} plans found. Try changing the filter or create a new plan.
+            </p>
+            <p class="text-sm md:text-base" v-else>
+              You don't have any money plans yet. Click the "Start New Plan" button to create one.
+            </p>
           </div>
         </div>
+        
+        <!-- Display filtered plans -->
+        <MoneyPlanCard 
+          v-for="plan in filteredPlans" 
+          :key="plan.id" 
+          :plan="plan" 
+        />
       </div>
     </div>
     
@@ -48,7 +67,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watchEffect } from 'vue';
 import { useQuery } from '@urql/vue';
-import { RouterLink } from 'vue-router';
 import StartPlanDialog from '../components/StartPlanDialog.vue';
 import MoneyPlanCard from '../components/MoneyPlanCard.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -73,10 +91,17 @@ interface MoneyPlan {
 
 const showStartPlanDialog = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
+const filterStatus = ref('all'); // 'all', 'draft', or 'committed'
 
-// Computed property to get the first draft plan (if any)
-const draftPlan = computed(() => {
-  return moneyPlans.value.find(plan => !plan.isCommitted);
+// Computed property to filter plans based on selected status
+const filteredPlans = computed(() => {
+  if (filterStatus.value === 'all') {
+    return moneyPlans.value;
+  } else if (filterStatus.value === 'draft') {
+    return moneyPlans.value.filter(plan => !plan.isCommitted);
+  } else {
+    return moneyPlans.value.filter(plan => plan.isCommitted);
+  }
 });
 
 const GET_MONEY_PLANS = `

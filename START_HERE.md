@@ -9,3 +9,8 @@
 ## Cleanup
 
 To delete the kind cluster, run `kind delete cluster --name amoneyplan`
+
+### Frontend
+- `cd frontend`
+- `pnpm install`
+- `pnpm dev`

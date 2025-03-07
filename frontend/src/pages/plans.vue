@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-base-200">
     <!-- Page Header -->
     <PageHeader 
-      title="All Money Plans"
+      title="Your money plans"
       subtitle="View and manage all your money plans"
       :centered="true"
     />
@@ -27,13 +27,6 @@
             Committed
           </button>
         </div>
-        
-        <button @click="showStartPlanDialog = true" class="btn btn-primary btn-sm md:btn-md">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Start New Plan
-        </button>
       </div>
       
       <!-- Plans List -->
@@ -83,6 +76,7 @@ interface Account {
 
 interface MoneyPlan {
   id: string;
+  timestamp: string;
   accounts: Account[];
   isCommitted: boolean;
   initialBalance: number;
@@ -115,6 +109,7 @@ const GET_MONEY_PLANS = `
       edges {
         node {
           id
+          timestamp
           accounts {
             name
             buckets {

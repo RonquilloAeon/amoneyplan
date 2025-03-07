@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-base-200">
     <!-- Hero section with title -->
     <PageHeader 
-      title="Money Plans"
+      title="Money planning made simple"
       subtitle="Manage your finances with smart money plans"
       :centered="true"
     />
@@ -10,7 +10,13 @@
     <div class="container mx-auto pb-8">
       <!-- Action Button with responsive positioning -->
       <div class="flex justify-center sm:justify-end mb-4 px-4">
-        <button @click="showStartPlanDialog = true" class="btn btn-primary btn-sm md:btn-md">
+        <button 
+          @click="showStartPlanDialog = true" 
+          class="btn btn-primary btn-sm md:btn-md"
+          :disabled="!!draftPlan"
+          :class="{'btn-disabled': !!draftPlan}"
+          :title="draftPlan ? 'Complete your draft plan first' : 'Start a new plan'"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
@@ -24,7 +30,9 @@
         <div v-if="draftPlan" class="card bg-base-100 shadow-xl">
           <div class="card-body p-4 md:p-6">
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-              <h2 class="card-title text-base md:text-lg">Plan ID: {{ draftPlan.id }}</h2>
+              <h2 class="card-title text-base md:text-lg">
+                <PlanDate :timestamp="draftPlan.timestamp" />
+              </h2>
               <div class="badge badge-md md:badge-lg badge-ghost">
                 Draft
               </div>
@@ -101,6 +109,22 @@
                 </div>
               </div>
             </div>
+            
+            <!-- Commit Plan section at the bottom of draft plan -->
+            <div class="mt-4 flex flex-col items-center">
+              <button 
+                @click="commitPlan"
+                class="btn btn-primary"
+                :disabled="draftPlan.remainingBalance !== 0"
+                :class="{'btn-disabled': draftPlan.remainingBalance !== 0, 'loading': isCommittingPlan}"
+              >
+                <span v-if="!isCommittingPlan">Commit Plan</span>
+                <span v-else>Committing...</span>
+              </button>
+              <p v-if="draftPlan.remainingBalance !== 0" class="text-error mt-2 text-sm">
+                You need to allocate all funds before committing the plan (Remaining: ${{ draftPlan.remainingBalance }})
+              </p>
+            </div>
           </div>
         </div>
         
@@ -129,16 +153,24 @@
       @close="showAddAccountModal = false" 
       @accountAdded="handleAccountAdded" 
     />
+
+    <!-- Toast notifications -->
+    <div class="toast toast-end" v-if="toast.show">
+      <div class="alert" :class="toast.type">
+        <span>{{ toast.message }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watchEffect } from 'vue';
-import { useQuery } from '@urql/vue';
+import { useQuery, useMutation } from '@urql/vue';
 import { RouterLink } from 'vue-router';
 import StartPlanDialog from '../components/StartPlanDialog.vue';
 import AddAccountModal from '../components/AddAccountModal.vue';
 import PageHeader from '../components/PageHeader.vue';
+import PlanDate from '../components/PlanDate.vue';
 
 interface Bucket {
   bucketName: string;
@@ -153,15 +185,28 @@ interface Account {
 
 interface MoneyPlan {
   id: string;
+  timestamp: string;
   accounts: Account[];
   isCommitted: boolean;
   initialBalance: number;
   remainingBalance: number;
 }
 
+interface Toast {
+  show: boolean;
+  message: string;
+  type: string;
+}
+
 const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
+const isCommittingPlan = ref(false);
+const toast = ref<Toast>({
+  show: false,
+  message: '',
+  type: 'alert-info'
+});
 
 // Computed property to get the first draft plan (if any)
 const draftPlan = computed(() => {
@@ -196,7 +241,24 @@ const GET_MONEY_PLANS = `
   }
 `;
 
+const COMMIT_PLAN = `
+  mutation commitPlan($input: CommitPlanInput!) {
+    moneyPlan {
+      commitPlan(input: $input) {
+        error {
+          message
+        }
+        success
+        moneyPlan {
+          isCommitted
+        }
+      }
+    }
+  }
+`;
+
 const { data, error, executeQuery } = useQuery({ query: GET_MONEY_PLANS });
+const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
 
 watchEffect(() => {
   if (data.value) {
@@ -204,6 +266,7 @@ watchEffect(() => {
   }
   if (error.value) {
     console.error(error.value);
+    showToast('Failed to load money plans', 'alert-error');
   }
 });
 
@@ -227,8 +290,59 @@ function handleAccountAdded(updatedPlan: MoneyPlan) {
 function calculateAccountTotal(account: Account): number {
   return account.buckets.reduce((total, bucket) => total + bucket.allocatedAmount, 0);
 }
+
+// Show toast notification
+function showToast(message: string, type: string = 'alert-info') {
+  toast.value = {
+    show: true,
+    message,
+    type
+  };
+  
+  // Automatically hide the toast after 3 seconds
+  setTimeout(() => {
+    toast.value.show = false;
+  }, 3000);
+}
+
+// Commit the current draft plan
+async function commitPlan() {
+  if (!draftPlan.value || draftPlan.value.remainingBalance !== 0) {
+    return;
+  }
+  
+  isCommittingPlan.value = true;
+  
+  try {
+    const result = await executeCommitPlan({
+      input: {
+        planId: draftPlan.value.id
+      }
+    });
+    
+    if (result.data?.moneyPlan?.commitPlan?.success) {
+      showToast('Plan committed successfully!', 'alert-success');
+      // Refresh the plans list
+      executeQuery();
+    } else {
+      const errorMessage = result.data?.moneyPlan?.commitPlan?.error?.message || 'Failed to commit plan';
+      showToast(errorMessage, 'alert-error');
+    }
+  } catch (e) {
+    console.error('Error committing plan:', e);
+    showToast('An error occurred while committing the plan', 'alert-error');
+  } finally {
+    isCommittingPlan.value = false;
+  }
+}
 </script>
 
 <style scoped>
 /* Add any scoped styles here */
+.toast {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 1000;
+}
 </style>

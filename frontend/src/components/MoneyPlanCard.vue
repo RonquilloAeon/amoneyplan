@@ -2,7 +2,9 @@
   <div class="card bg-base-100 shadow-xl">
     <div class="card-body p-4 md:p-6">
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-        <h2 class="card-title text-base md:text-lg">Plan ID: {{ plan.id }}</h2>
+        <h2 class="card-title text-base md:text-lg">
+          <PlanDate :timestamp="plan.timestamp" />
+        </h2>
         <div class="badge badge-md md:badge-lg" :class="plan.isCommitted ? 'badge-primary' : 'badge-ghost'">
           {{ plan.isCommitted ? 'Committed' : 'Draft' }}
         </div>
@@ -55,6 +57,8 @@
 </template>
 
 <script setup lang="ts">
+import PlanDate from './PlanDate.vue';
+
 interface Bucket {
   bucketName: string;
   allocatedAmount: number;
@@ -67,6 +71,7 @@ interface Account {
 
 interface MoneyPlan {
   id: string;
+  timestamp: string;
   accounts: Account[];
   isCommitted: boolean;
   initialBalance: number;

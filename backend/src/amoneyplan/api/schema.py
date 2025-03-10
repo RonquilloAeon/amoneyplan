@@ -77,7 +77,9 @@ class MoneyPlan(relay.Node):
     accounts: List[Account]
     notes: str
     is_committed: bool
+    is_archived: bool
     timestamp: Optional[str] = None
+    archived_at: Optional[str] = None
 
     @classmethod
     def resolve_node(cls, node_id: str, info: Info) -> Optional["MoneyPlan"]:
@@ -99,7 +101,9 @@ class MoneyPlan(relay.Node):
             ],
             notes=domain_plan.notes,
             is_committed=domain_plan.committed,
+            is_archived=domain_plan.is_archived,
             timestamp=domain_plan.timestamp.isoformat() if domain_plan.timestamp else None,
+            archived_at=domain_plan.archived_at.isoformat() if domain_plan.archived_at else None,
         )
         return plan
 
@@ -198,6 +202,11 @@ class AddAccountInput:
 
 @strawberry.input
 class CommitPlanInput:
+    plan_id: relay.GlobalID
+
+
+@strawberry.input
+class ArchivePlanInput:
     plan_id: relay.GlobalID
 
 
@@ -483,6 +492,23 @@ class MoneyPlanMutations:
             plan = service.get_plan(plan_id)
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
+            return PlanResult(error=Error(message=str(e)), success=False)
+
+    @strawberry.mutation
+    def archive_plan(self, info: Info, input: ArchivePlanInput) -> PlanResult:
+        """Archive a money plan to prevent further modifications."""
+        try:
+            service = apps.get_app_config("money_plans").money_planner
+            plan_id = UUID(input.plan_id.node_id)
+            plan = service.get_plan(plan_id)
+
+            service.archive_plan(plan_id)
+
+            # Get updated plan state
+            plan = service.get_plan(plan_id)
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+        except (MoneyPlanError, ValueError) as e:
+            logger.error("Error archiving plan: %s", str(e), exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
 
 

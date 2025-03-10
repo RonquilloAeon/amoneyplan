@@ -346,3 +346,17 @@ class MoneyPlanner(Application):
         # This method can be implemented to handle any side effects or notifications
         # that need to happen when domain events occur
         pass
+
+    def archive_plan(self, plan_id: UUID) -> None:
+        """
+        Archive a money plan to prevent further modifications.
+
+        Args:
+            plan_id: The ID of the plan to archive
+
+        Raises:
+            MoneyPlanError: If the plan doesn't exist or is already archived
+        """
+        plan = self.get_plan(plan_id)
+        plan.archive_plan()
+        self.save(plan)

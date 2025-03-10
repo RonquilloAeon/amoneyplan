@@ -117,10 +117,10 @@ resource "kubernetes_deployment" "backend" {
 
       spec {
         container {
-          name  = "backend"
-          image = "amoneyplan-backend:latest"
-          image_pull_policy = "Never"  # Don't try to pull from Docker Hub
-          working_dir = "/src"
+          name              = "backend"
+          image             = "amoneyplan-backend:latest"
+          image_pull_policy = "Never" # Don't try to pull from Docker Hub
+          working_dir       = "/src"
 
           port {
             container_port = 8000
@@ -184,14 +184,14 @@ resource "kubernetes_deployment" "backend" {
           }
 
           command = ["/bin/bash", "-c"]
-          args    = [<<-EOT
+          args = [<<-EOT
             python manage.py migrate &&
             python manage.py runserver 0.0.0.0:8000
           EOT
           ]
 
           volume_mount {
-            name = "src-code"
+            name       = "src-code"
             mount_path = "/src"
           }
         }

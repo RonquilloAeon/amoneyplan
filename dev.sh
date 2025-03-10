@@ -10,6 +10,8 @@ if [ "$#" -eq 0 ] || [ "$1" = "help" ]; then
     echo
     echo "Development commands:"
     echo "  reload    - Restart the backend pod (use when file changes aren't detected)"
+    echo "  backend   - Run backend-related commands via tf.sh"
+    echo "  frontend  - Run frontend-related commands via pnpm"
     echo
     echo "Available commands (from tf.sh):"
     echo "--------------------------------"
@@ -17,5 +19,16 @@ if [ "$#" -eq 0 ] || [ "$1" = "help" ]; then
     exit 0
 fi
 
-# Change to the Terraform directory and execute tf.sh with all arguments
-cd infra_dev/terraform && ./tf.sh "$@"
+case "$1" in
+    "backend")
+        shift  # Remove the first argument
+        cd infra_dev/terraform && ./tf.sh "$@"
+        ;;
+    "frontend")
+        shift  # Remove the first argument
+        cd frontend && pnpm "$@"
+        ;;
+    *)
+        cd infra_dev/terraform && ./tf.sh "$@"
+        ;;
+esac

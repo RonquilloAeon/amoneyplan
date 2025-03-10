@@ -3,7 +3,7 @@ resource "kubernetes_storage_class" "local" {
     name = "local-storage"
   }
   storage_provisioner = "docker.io/hostpath"
-  reclaim_policy     = "Retain"
+  reclaim_policy      = "Retain"
 }
 
 resource "kubernetes_persistent_volume" "postgres" {
@@ -15,7 +15,7 @@ resource "kubernetes_persistent_volume" "postgres" {
     capacity = {
       storage = var.postgres_storage
     }
-    access_modes = ["ReadWriteOnce"]
+    access_modes                     = ["ReadWriteOnce"]
     persistent_volume_reclaim_policy = "Retain"
     persistent_volume_source {
       host_path {

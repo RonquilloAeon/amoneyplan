@@ -13,7 +13,7 @@ terraform {
       version = "3.0.2"
     }
     time = {
-      source = "hashicorp/time"
+      source  = "hashicorp/time"
       version = "0.10.0"
     }
   }
@@ -22,10 +22,10 @@ terraform {
 provider "kind" {}
 
 provider "kubernetes" {
-  host = kind_cluster.amoneyplan.endpoint
+  host                   = kind_cluster.amoneyplan.endpoint
   cluster_ca_certificate = kind_cluster.amoneyplan.cluster_ca_certificate
-  client_certificate = kind_cluster.amoneyplan.client_certificate
-  client_key = kind_cluster.amoneyplan.client_key
+  client_certificate     = kind_cluster.amoneyplan.client_certificate
+  client_key             = kind_cluster.amoneyplan.client_key
 }
 
 provider "docker" {
@@ -33,10 +33,10 @@ provider "docker" {
 }
 
 resource "kind_cluster" "amoneyplan" {
-  name = "amoneyplan"
+  name       = "amoneyplan"
   node_image = "kindest/node:v1.29.0"
   kind_config {
-    kind = "Cluster"
+    kind        = "Cluster"
     api_version = "kind.x-k8s.io/v1alpha4"
 
     node {
@@ -44,20 +44,24 @@ resource "kind_cluster" "amoneyplan" {
 
       extra_port_mappings {
         container_port = 30080
-        host_port     = 8001
-        protocol      = "TCP"
+        host_port      = 8001
+        protocol       = "TCP"
       }
 
       extra_port_mappings {
         container_port = 30432
-        host_port     = 5432
-        protocol      = "TCP"
+        host_port      = 5432
+        protocol       = "TCP"
       }
 
       # Add source code mounting for hot reload
       extra_mounts {
-        host_path = "${path.root}/../../backend/src"
+        host_path      = "${path.root}/../../backend/src"
         container_path = "/src"
+      }
+
+      labels = {
+        "com.docker.prune.keep" = "true"
       }
     }
   }
@@ -70,19 +74,23 @@ resource "kind_cluster" "amoneyplan" {
 
 # Wait for the cluster to be fully ready
 resource "time_sleep" "wait_for_cluster" {
-  depends_on = [kind_cluster.amoneyplan]
+  depends_on      = [kind_cluster.amoneyplan]
   create_duration = "30s"
 }
 
 resource "docker_image" "backend" {
   name = "amoneyplan-backend:latest"
   build {
-    context = "${path.root}/../../backend"
-    tag     = ["amoneyplan-backend:latest"]
+    context  = "${path.root}/../../backend"
+    tag      = ["amoneyplan-backend:latest"]
     no_cache = true
+
+    label = {
+      "com.docker.prune.keep" = "true"
+    }
   }
   triggers = {
-    dir_sha1 = sha1(join("", [for f in fileset("${path.root}/../../backend", "**"): filesha1("${path.root}/../../backend/${f}")]))
+    dir_sha1 = sha1(join("", [for f in fileset("${path.root}/../../backend", "**") : filesha1("${path.root}/../../backend/${f}")]))
   }
 }
 

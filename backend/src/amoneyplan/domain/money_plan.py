@@ -81,7 +81,14 @@ class MoneyPlan(Aggregate):
         self.accounts: Dict[UUID, PlanAccountAllocation] = {}
         self.notes = ""
         self.committed = False
+        self.is_archived = False
         self.timestamp = None
+        self.archived_at = None
+
+    def _check_not_archived(self):
+        """Helper method to check if plan is not archived"""
+        if self.is_archived:
+            raise MoneyPlanError("Cannot modify an archived plan")
 
     @event("PlanStarted")
     def start_plan(
@@ -146,6 +153,8 @@ class MoneyPlan(Aggregate):
             BucketNotFoundError: If the bucket doesn't exist in the account
             InsufficientFundsError: If there aren't enough funds to allocate
         """
+        self._check_not_archived()
+
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot allocate funds to a committed plan")
 
@@ -202,6 +211,8 @@ class MoneyPlan(Aggregate):
             BucketNotFoundError: If the bucket doesn't exist in the account
             InsufficientFundsError: If there aren't enough funds for the new allocation
         """
+        self._check_not_archived()
+
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot adjust allocations in a committed plan")
 
@@ -251,6 +262,8 @@ class MoneyPlan(Aggregate):
         Raises:
             PlanAlreadyCommittedError: If the plan is already committed
         """
+        self._check_not_archived()
+
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot adjust the balance of a committed plan")
 
@@ -276,6 +289,8 @@ class MoneyPlan(Aggregate):
             PlanAlreadyCommittedError: If the plan is already committed
             AccountNotFoundError: If the account ID doesn't exist
         """
+        self._check_not_archived()
+
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot change account configuration in a committed plan")
 
@@ -354,6 +369,21 @@ class MoneyPlan(Aggregate):
         # All invariants satisfied, commit the plan
         self.committed = True
 
+    @event("PlanArchived")
+    def archive_plan(self):
+        """
+        Archive the money plan, preventing further modifications.
+        Plans can be archived regardless of commitment status.
+
+        Raises:
+            MoneyPlanError: If the plan is already archived
+        """
+        if self.is_archived:
+            raise MoneyPlanError("Plan is already archived")
+
+        self.is_archived = True
+        self.archived_at = datetime.utcnow()
+
     @event("AccountAdded")
     def add_account(self, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None) -> UUID:
         """
@@ -369,6 +399,8 @@ class MoneyPlan(Aggregate):
         Raises:
             PlanAlreadyCommittedError: If the plan is already committed
         """
+        self._check_not_archived()
+
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot add an account to a committed plan")
 

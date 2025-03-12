@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from amoneyplan.domain.money_plan import MoneyPlan
+from amoneyplan.domain.money_plan import MoneyPlan, MoneyPlanError
 
 
 @pytest.fixture
@@ -78,3 +78,64 @@ def test_account_no_default_bucket_when_buckets_provided():
     assert "Default" not in account.buckets
     assert "Savings" in account.buckets
     assert "Bills" in account.buckets
+
+
+def test_archive_uncommitted_plan(money_plan):
+    """Test archiving an uncommitted money plan."""
+    assert not money_plan.is_archived
+    assert money_plan.archived_at is None
+
+    # Archive the plan
+    money_plan.archive_plan()
+
+    # Verify the plan is now archived
+    assert money_plan.is_archived
+    assert money_plan.archived_at is not None
+
+
+def test_archive_committed_plan():
+    """Test archiving a committed money plan."""
+    # Create a plan with some funds and accounts
+    plan = MoneyPlan()
+    plan.start_plan(initial_balance=1000)
+
+    # Add an account with a bucket to make the plan committable
+    plan.add_account(
+        name="Test Account",
+        buckets=[{"bucket_name": "Savings", "category": "savings", "allocated_amount": 1000}],
+    )
+
+    # Commit the plan
+    plan.commit_plan()
+    assert plan.committed
+
+    # Archive the plan
+    plan.archive_plan()
+
+    # Verify the plan is archived
+    assert plan.is_archived
+    assert plan.archived_at is not None
+
+
+def test_archive_already_archived_plan(money_plan):
+    """Test that archiving an already archived plan raises an error."""
+    # Archive the plan once
+    money_plan.archive_plan()
+    assert money_plan.is_archived
+
+    # Try to archive again - should raise an error
+    with pytest.raises(MoneyPlanError, match="Plan is already archived"):
+        money_plan.archive_plan()
+
+
+def test_cannot_modify_archived_plan(money_plan):
+    """Test that an archived plan cannot be modified."""
+    # Archive the plan
+    money_plan.archive_plan()
+
+    # Attempts to modify should raise errors
+    with pytest.raises(MoneyPlanError, match="Cannot modify an archived plan"):
+        money_plan.add_account(name="New Account")
+
+    with pytest.raises(MoneyPlanError, match="Cannot modify an archived plan"):
+        money_plan.adjust_plan_balance(adjustment=100)

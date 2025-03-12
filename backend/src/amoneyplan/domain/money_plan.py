@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Union
 from uuid import UUID
 
-from eventsourcing.domain import Aggregate, event
+from eventsourcing.domain import Aggregate, DomainEvent, event
 
 from amoneyplan.domain.account import Account, Bucket, PlanAccountAllocation
 from amoneyplan.domain.money import Money
@@ -451,3 +451,7 @@ class MoneyPlan(Aggregate):
         for account_allocation in self.accounts.values():
             total += account_allocation.get_total_allocated()
         return total
+
+
+class MoneyPlanLogged(DomainEvent):
+    plan_id: UUID

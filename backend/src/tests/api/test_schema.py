@@ -467,6 +467,7 @@ class TestGraphQLAPI:
                         notes
                         isCommitted
                     }
+                    cursor
                 }
                 pageInfo {
                     hasNextPage
@@ -488,7 +489,7 @@ class TestGraphQLAPI:
         edges = result["moneyPlans"]["edges"]
         assert len(edges) == 2
 
-        # Plans should be ordered by creation (most recent first)
+        # Plans should be ordered by notification position (most recent first)
         assert edges[0]["node"]["initialBalance"] == 2000.0
         assert edges[0]["node"]["notes"] == "Plan 2"
         assert edges[0]["node"]["isCommitted"] is True
@@ -496,10 +497,14 @@ class TestGraphQLAPI:
         assert edges[1]["node"]["notes"] == "Plan 1"
         assert edges[1]["node"]["isCommitted"] is True
 
-        # Test pagination
+        # Each edge should have a cursor
+        assert edges[0]["cursor"] is not None
+        assert edges[1]["cursor"] is not None
+
+        # Test forward pagination
         query_with_first = """
-        query GetMoneyPlans($first: Int) {
-            moneyPlans(first: $first) {
+        query GetMoneyPlans($first: Int, $after: String) {
+            moneyPlans(first: $first, after: $after) {
                 edges {
                     node {
                         id
@@ -507,6 +512,7 @@ class TestGraphQLAPI:
                         notes
                         isCommitted
                     }
+                    cursor
                 }
                 pageInfo {
                     hasNextPage
@@ -521,11 +527,27 @@ class TestGraphQLAPI:
         # Get only the first plan
         result = self.execute_query(client, query_with_first, {"first": 1})
         edges = result["moneyPlans"]["edges"]
+        page_info = result["moneyPlans"]["pageInfo"]
+
         assert len(edges) == 1
         assert edges[0]["node"]["initialBalance"] == 2000.0
         assert edges[0]["node"]["notes"] == "Plan 2"
         assert edges[0]["node"]["isCommitted"] is True
-        assert result["moneyPlans"]["pageInfo"]["hasNextPage"] is True
+        assert page_info["hasNextPage"] is True
+        assert page_info["hasPreviousPage"] is False
+
+        # Get the next plan using the cursor
+        first_cursor = edges[0]["cursor"]
+        result = self.execute_query(client, query_with_first, {"first": 1, "after": first_cursor})
+        edges = result["moneyPlans"]["edges"]
+        page_info = result["moneyPlans"]["pageInfo"]
+
+        assert len(edges) == 1
+        assert edges[0]["node"]["initialBalance"] == 1000.0
+        assert edges[0]["node"]["notes"] == "Plan 1"
+        assert edges[0]["node"]["isCommitted"] is True
+        assert page_info["hasNextPage"] is False
+        assert page_info["hasPreviousPage"] is True
 
     def test_cannot_create_multiple_uncommitted_plans(self, client, money_planner):
         """Test that we cannot create multiple uncommitted plans."""

@@ -246,69 +246,99 @@ class Query:
         first: Optional[int] = None,
         last: Optional[int] = None,
     ) -> MoneyPlanConnection:
-        """
-        List all Money Plans with pagination support.
-        """
+        """Get a paginated list of money plans."""
         try:
             service = apps.get_app_config("money_plans").money_planner
-            # Set user ID from request context
-            service.user_id = str(info.context.request.user.id)
 
-            plan_ids = service.list_plans()
-            plans = []
+            # Convert cursor strings to notification positions
+            after_pos = None if after is None else int(strawberry.relay.from_base64(after)[1])
+            before_pos = None if before is None else int(strawberry.relay.from_base64(before)[1])
 
-            for plan_id in plan_ids:
-                try:
-                    plan = service.get_plan(plan_id)
-                    plans.append(MoneyPlan.from_domain(plan))
-                except KeyError:
-                    logger.warning(f"Plan {plan_id} not found")
-                    continue
+            # Use descending order by default, switch to ascending only if using 'last'
+            desc = not bool(last)
 
-            # Handle pagination
-            if after:
-                after_index = next(
-                    (
-                        i
-                        for i, plan in enumerate(plans)
-                        if str(plan.id) == strawberry.relay.from_base64(after)[1]
+            # NOTE: Since we store plans in ascending order (1,2,3...), but want to display in
+            # descending order (most recent first), we need to adjust our gt/lte logic:
+            #
+            # For desc=True (default, most recent first):
+            # - after=5 means "get plans with position < 5"
+            # - before=5 means "get plans with position >= 5"
+            #
+            # For desc=False (when using last):
+            # - after=5 means "get plans with position > 5"
+            # - before=5 means "get plans with position <= 5"
+            if desc:
+                # When desc=True, swap gt/lte logic
+                gt_pos = None
+                lte_pos = after_pos - 1 if after_pos is not None else before_pos
+            else:
+                # When desc=False (using last), use normal gt/lte logic
+                gt_pos = after_pos
+                lte_pos = before_pos
+
+            plans_with_pos = list(service.get_plans(gt=gt_pos, lte=lte_pos, desc=desc, limit=first or last))
+
+            # If using 'last', we need to reverse the results since we got them in ascending order
+            if last:
+                plans_with_pos.reverse()
+
+            # No plans found
+            if not plans_with_pos:
+                return MoneyPlanConnection(
+                    edges=[],
+                    page_info=relay.PageInfo(
+                        has_next_page=False,
+                        has_previous_page=False,
+                        start_cursor=None,
+                        end_cursor=None,
                     ),
-                    0,
                 )
-                plans = plans[after_index + 1 :]
 
-            if before:
-                before_index = next(
-                    (
-                        i
-                        for i, plan in enumerate(plans)
-                        if str(plan.id) == strawberry.relay.from_base64(before)[1]
-                    ),
-                    len(plans),
-                )
-                plans = plans[:before_index]
-
-            if first:
-                plans = plans[:first]
-            elif last:
-                plans = plans[-last:]
-
-            has_next_page = False
-            has_previous_page = False
-
-            if first and len(plans) == first:
-                has_next_page = True
-            if last and len(plans) == last:
-                has_previous_page = True
-
+            # Create edges with cursors based on notification positions
             edges = [
-                strawberry.relay.Edge(node=plan, cursor=strawberry.relay.to_base64("MoneyPlan", str(plan.id)))
-                for plan in plans
+                strawberry.relay.Edge(
+                    node=MoneyPlan.from_domain(plan), cursor=strawberry.relay.to_base64("MoneyPlan", str(pos))
+                )
+                for pos, plan in plans_with_pos
             ]
 
+            # The key insight for pagination is that positions increase as plans are created.
+            # But we want to show most recent first, so we display them in reverse order.
+            #
+            # Therefore:
+            # - For 'first': next page means lower positions, previous page means higher positions
+            # - For 'last': next page means higher positions, previous page means lower positions
+            min_pos = min(pos for pos, _ in plans_with_pos)
+            max_pos = max(pos for pos, _ in plans_with_pos)
+
+            if first:
+                # When paginating forward with 'first':
+                has_next = bool(
+                    list(
+                        service.get_plans(
+                            lte=min_pos - 1,  # Look for records with lower positions
+                            limit=1,
+                            desc=desc,
+                        )
+                    )
+                )
+                has_previous = after_pos is not None  # If we used 'after', there must be previous pages
+            else:  # last
+                # When paginating backward with 'last':
+                has_next = bool(
+                    list(
+                        service.get_plans(
+                            gt=max_pos,  # Look for records with higher positions
+                            limit=1,
+                            desc=desc,
+                        )
+                    )
+                )
+                has_previous = before_pos is not None  # If we used 'before', there must be previous pages
+
             page_info = relay.PageInfo(
-                has_next_page=has_next_page,
-                has_previous_page=has_previous_page,
+                has_next_page=has_next,
+                has_previous_page=has_previous,
                 start_cursor=edges[0].cursor if edges else None,
                 end_cursor=edges[-1].cursor if edges else None,
             )
@@ -316,7 +346,6 @@ class Query:
             return MoneyPlanConnection(edges=edges, page_info=page_info)
         except Exception as e:
             logger.error(f"Error fetching money plans: {e}", exc_info=True)
-            # Return an empty connection instead of raising the error
             return MoneyPlanConnection(
                 edges=[],
                 page_info=relay.PageInfo(

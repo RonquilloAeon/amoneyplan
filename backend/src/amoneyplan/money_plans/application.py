@@ -4,11 +4,11 @@ Application service for managing Money Plans.
 
 import logging
 from dataclasses import asdict
-from typing import List, Optional, Union
-from uuid import UUID
+from typing import Iterator, List, Optional, Union
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from django.core.cache import cache
-from eventsourcing.application import AggregateNotFoundError, Application
+from eventsourcing.application import AggregateNotFoundError, Application, EventSourcedLog
 from eventsourcing.persistence import Transcoding
 from eventsourcing.system import ProcessingEvent
 
@@ -17,6 +17,7 @@ from amoneyplan.domain.money_plan import (
     AccountAllocationConfig,
     BucketConfig,
     MoneyPlan,
+    MoneyPlanLogged,
     PlanAlreadyCommittedError,
 )
 
@@ -62,6 +63,9 @@ class MoneyPlanner(Application):
     def __init__(self, env):
         super().__init__(env)
         self.user_id = None  # Will be set by the GraphQL context
+        self.plan_log: EventSourcedLog[MoneyPlanLogged] = EventSourcedLog(
+            self.events, uuid5(NAMESPACE_URL, "/money_plan_log"), MoneyPlanLogged
+        )
 
     def register_transcodings(self, transcoder):
         super().register_transcodings(transcoder)
@@ -120,9 +124,10 @@ class MoneyPlanner(Application):
         # Create new plan
         plan = MoneyPlan()
         plan.start_plan(initial_balance=initial_balance, default_allocations=default_allocations, notes=notes)
+        plan_logged = self.plan_log.trigger_event(plan_id=plan.id)
 
         # Save the plan and update current plan ID
-        self.save(plan)
+        self.save(plan, plan_logged)
         self._set_current_plan_id(plan.id)
 
         return plan.id
@@ -302,37 +307,28 @@ class MoneyPlanner(Application):
         if current_plan_id == plan_id:
             self._set_current_plan_id(None)
 
-    def list_plans(self) -> List[UUID]:
-        """
-        List all Money Plan IDs.
+    def get_plans(
+        self,
+        *,
+        gt: int | None = None,
+        lte: int | None = None,
+        desc: bool = True,  # Default to descending (most recent first)
+        limit: int | None = None,
+    ) -> Iterator[tuple[int, MoneyPlan]]:
+        """Get money plans with their notification positions for cursor-based pagination.
+
+        Args:
+            gt: Return plans after this notification position
+            lte: Return plans up to and including this notification position
+            desc: Order by notification position descending (defaults to True for most recent first)
+            limit: Maximum number of plans to return
 
         Returns:
-            A list of Money Plan IDs ordered by creation time (most recent first)
+            Iterator of (position, plan) tuples where position can be used as a cursor
         """
-        # Use the events store to find all initial events (version 1) for plans
-        seen_plans = set()  # Track plans we've seen to avoid duplicates
-        plan_ids = []  # Preserve order while avoiding duplicates
-        # Get notifications in batches of 10 (default section size)
-        start = 1
-        while True:
-            try:
-                notifications = list(self.notification_log.select(start=start, limit=10))
-                if not notifications:
-                    break
-
-                # Process notifications in reverse order to get most recent first
-                for notification in reversed(notifications):
-                    if notification.originator_version == 1:  # Initial plan creation event
-                        if notification.originator_id not in seen_plans:
-                            plan_ids.append(notification.originator_id)
-                            seen_plans.add(notification.originator_id)
-
-                start += len(notifications)
-            except ValueError:
-                # We've reached the end of the log
-                break
-
-        return plan_ids
+        for notification in self.plan_log.get(gt=gt, lte=lte, desc=desc, limit=limit):
+            # Return both the notification position (for cursors) and the plan
+            yield notification.originator_version, self.get_plan(notification.plan_id)
 
     # Notification handlers for processing events
     def policy(self, domain_event: ProcessingEvent, process_event) -> None:

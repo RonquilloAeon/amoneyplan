@@ -392,7 +392,9 @@ async function archivePlan() {
 
     if (result.data?.moneyPlan?.archivePlan?.success) {
       showToast('Plan archived successfully', 'alert-success');
-      // Refresh the plans list to remove the archived draft
+      // Clear the plans list since archived plan is no longer a draft
+      moneyPlans.value = [];
+      // Refresh the query to make sure we get any other draft plans
       executeQuery();
     } else {
       const errorMessage = result.data?.moneyPlan?.archivePlan?.error?.message || 'Failed to archive plan';

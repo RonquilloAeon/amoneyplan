@@ -362,7 +362,7 @@ class MoneyPlan(Aggregate):
             difference = Money(self.initial_balance.as_decimal - total_allocated)
             raise InvalidPlanStateError(
                 f"Sum of bucket allocations ({total_allocated}) "
-                "must equal initial balance ({self.initial_balance}). "
+                f"must equal initial balance ({self.initial_balance}). "
                 f"Difference: {difference}"
             )
 

@@ -210,6 +210,14 @@ class ArchivePlanInput:
     plan_id: relay.GlobalID
 
 
+@strawberry.input
+class MoneyPlanFilter:
+    """Input type for filtering money plans."""
+
+    include_archived: bool = False
+    status: Optional[str] = None  # 'all', 'draft', or 'committed'
+
+
 # GraphQL queries
 @strawberry.type
 class Query:
@@ -245,6 +253,7 @@ class Query:
         before: Optional[str] = None,
         first: Optional[int] = None,
         last: Optional[int] = None,
+        filter: Optional[MoneyPlanFilter] = None,
     ) -> MoneyPlanConnection:
         """Get a paginated list of money plans."""
         try:
@@ -277,6 +286,23 @@ class Query:
                 lte_pos = before_pos
 
             plans_with_pos = list(service.get_plans(gt=gt_pos, lte=lte_pos, desc=desc, limit=first or last))
+
+            # Apply filters if provided
+            if filter:
+                # Filter archived plans
+                if not filter.include_archived:
+                    plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.is_archived]
+
+                # Filter by status if specified
+                if filter.status:
+                    if filter.status == "draft":
+                        plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.committed]
+                    elif filter.status == "committed":
+                        plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if plan.committed]
+                    # 'all' requires no filtering
+            else:
+                # Default behavior: exclude archived plans
+                plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.is_archived]
 
             # If using 'last', we need to reverse the results since we got them in ascending order
             if last:

@@ -620,3 +620,144 @@ class TestGraphQLAPI:
         )
         assert "errors" not in result3
         assert result3["moneyPlan"]["startPlan"]["success"]
+
+    def test_money_plans_with_archived(self, client, money_planner):
+        """Test that archived plans are filtered out by default but can be included."""
+        # Create and commit two plans
+        plan1_id = self.create_money_plan(client, 1000.0, "Plan 1")
+        self.add_account_with_full_balance(client, plan1_id, 1000.0, "Account 1")
+        assert self.commit_plan(client, plan1_id)
+
+        plan2_id = self.create_money_plan(client, 2000.0, "Plan 2")
+        self.add_account_with_full_balance(client, plan2_id, 2000.0, "Account 2")
+        assert self.commit_plan(client, plan2_id)
+
+        # Archive plan 1
+        archive_mutation = """
+        mutation ArchivePlan($input: ArchivePlanInput!) {
+            moneyPlan {
+                archivePlan(input: $input) {
+                    success
+                }
+            }
+        }
+        """
+        archive_result = self.execute_query(client, archive_mutation, {"input": {"planId": plan1_id}})
+        assert archive_result["moneyPlan"]["archivePlan"]["success"]
+
+        # Query plans - should only get plan 2 by default
+        query = """
+        query GetMoneyPlans($filter: MoneyPlanFilter) {
+            moneyPlans(filter: $filter) {
+                edges {
+                    node {
+                        id
+                        initialBalance
+                        notes
+                        isCommitted
+                        isArchived
+                    }
+                }
+            }
+        }
+        """
+
+        # Without any filter (defaults to not including archived)
+        result = self.execute_query(client, query)
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 1
+        assert edges[0]["node"]["initialBalance"] == 2000.0
+        assert edges[0]["node"]["notes"] == "Plan 2"
+        assert not edges[0]["node"]["isArchived"]
+
+        # With includeArchived = true
+        result = self.execute_query(client, query, {"filter": {"includeArchived": True}})
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 2
+        assert edges[0]["node"]["initialBalance"] == 2000.0  # Most recent first
+        assert edges[1]["node"]["initialBalance"] == 1000.0
+        assert edges[1]["node"]["isArchived"]  # Plan 1 is archived
+
+    def test_money_plans_with_filters(self, client, money_planner):
+        """Test filtering money plans by status and archived state."""
+        # Create and commit two plans
+        plan1_id = self.create_money_plan(client, 1000.0, "Plan 1")
+        self.add_account_with_full_balance(client, plan1_id, 1000.0, "Account 1")
+        assert self.commit_plan(client, plan1_id)
+
+        plan2_id = self.create_money_plan(client, 2000.0, "Plan 2")
+        self.add_account_with_full_balance(client, plan2_id, 2000.0, "Account 2")
+        # Query to test draft filter before committing plan 2
+        query = """
+        query GetMoneyPlans($filter: MoneyPlanFilter) {
+            moneyPlans(filter: $filter) {
+                edges {
+                    node {
+                        id
+                        initialBalance
+                        notes
+                        isCommitted
+                        isArchived
+                    }
+                }
+            }
+        }
+        """
+
+        # Test status=draft filter
+        result = self.execute_query(client, query, {"filter": {"status": "draft"}})
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 1
+        assert edges[0]["node"]["initialBalance"] == 2000.0
+        assert edges[0]["node"]["notes"] == "Plan 2"
+        assert not edges[0]["node"]["isCommitted"]
+
+        # Now commit plan 2 before creating plan 3
+        assert self.commit_plan(client, plan2_id)
+
+        # Create a third plan and commit it
+        plan3_id = self.create_money_plan(client, 3000.0, "Plan 3")
+        self.add_account_with_full_balance(client, plan3_id, 3000.0, "Account 3")
+        assert self.commit_plan(client, plan3_id)
+
+        # Archive plan 3
+        archive_mutation = """
+        mutation ArchivePlan($input: ArchivePlanInput!) {
+            moneyPlan {
+                archivePlan(input: $input) {
+                    success
+                }
+            }
+        }
+        """
+        archive_result = self.execute_query(client, archive_mutation, {"input": {"planId": plan3_id}})
+        assert archive_result["moneyPlan"]["archivePlan"]["success"]
+
+        # Test status=committed filter
+        result = self.execute_query(client, query, {"filter": {"status": "committed"}})
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 2  # Plans 1 and 2 (Plan 3 is archived)
+        assert edges[0]["node"]["initialBalance"] == 2000.0  # Most recent first
+        assert edges[1]["node"]["initialBalance"] == 1000.0
+        assert all(edge["node"]["isCommitted"] for edge in edges)
+
+        # Test include_archived=true
+        result = self.execute_query(client, query, {"filter": {"includeArchived": True}})
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 3
+        assert edges[0]["node"]["initialBalance"] == 3000.0  # Most recent first
+        assert edges[1]["node"]["initialBalance"] == 2000.0
+        assert edges[2]["node"]["initialBalance"] == 1000.0
+        assert edges[0]["node"]["isArchived"]  # Plan 3 is archived
+
+        # Test both filters together
+        result = self.execute_query(
+            client, query, {"filter": {"status": "committed", "includeArchived": True}}
+        )
+        edges = result["moneyPlans"]["edges"]
+        assert len(edges) == 3  # All committed plans (including archived)
+        assert edges[0]["node"]["initialBalance"] == 3000.0  # Most recent first
+        assert edges[1]["node"]["initialBalance"] == 2000.0
+        assert edges[2]["node"]["initialBalance"] == 1000.0
+        assert edges[0]["node"]["isArchived"]  # Plan 3 is archived
+        assert all(edge["node"]["isCommitted"] for edge in edges)

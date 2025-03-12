@@ -188,6 +188,7 @@ interface MoneyPlan {
   timestamp: string;
   accounts: Account[];
   isCommitted: boolean;
+  isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
 }
@@ -214,8 +215,8 @@ const draftPlan = computed(() => {
 });
 
 const GET_MONEY_PLANS = `
-  query moneyPlans {
-    moneyPlans {
+  query moneyPlans($filter: MoneyPlanFilter) {
+    moneyPlans(filter: $filter) {
       pageInfo {
         hasNextPage
         startCursor
@@ -233,8 +234,10 @@ const GET_MONEY_PLANS = `
             }
           }
           isCommitted
+          isArchived
           initialBalance
           remainingBalance
+          timestamp
         }
       }
     }
@@ -257,7 +260,15 @@ const COMMIT_PLAN = `
   }
 `;
 
-const { data, error, executeQuery } = useQuery({ query: GET_MONEY_PLANS });
+const { data, error, executeQuery } = useQuery({
+  query: GET_MONEY_PLANS,
+  variables: { 
+    filter: {
+      status: 'draft'  // Only show draft plans on the home page
+    }
+  }
+});
+
 const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
 
 watchEffect(() => {

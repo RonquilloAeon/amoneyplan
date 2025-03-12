@@ -37,6 +37,11 @@
           </div>
         </div>
       </div>
+
+      <!-- Display notes if they exist -->
+      <div v-if="plan.notes" class="mb-4 text-sm md:text-base text-base-content/80">
+        {{ plan.notes }}
+      </div>
       
       <div class="divider my-1 md:my-2">Accounts</div>
       
@@ -93,6 +98,7 @@ interface MoneyPlan {
   isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
+  notes: string;
 }
 
 const props = defineProps<{

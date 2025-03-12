@@ -90,6 +90,7 @@ interface MoneyPlan {
   isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
+  notes: string;
 }
 
 interface Toast {
@@ -125,6 +126,7 @@ const GET_MONEY_PLANS = `
         node {
           id
           timestamp
+          notes
           accounts {
             name
             buckets {
@@ -172,7 +174,7 @@ const addPlan = (newPlan: MoneyPlan) => {
   moneyPlans.value.push(newPlan);
 };
 
-function handlePlanArchived(updatedPlan: MoneyPlan) {
+function handlePlanArchived(_updatedPlan: MoneyPlan) {
   // Show success message
   showToast('Plan archived successfully', 'alert-success');
   

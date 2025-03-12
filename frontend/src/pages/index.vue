@@ -65,6 +65,11 @@
               </div>
             </div>
 
+            <!-- Display notes if they exist -->
+            <div v-if="draftPlan.notes" class="mb-4 text-sm md:text-base text-base-content/80">
+              {{ draftPlan.notes }}
+            </div>
+
             <!-- Add Account button -->
             <div v-if="draftPlan.remainingBalance > 0" class="flex justify-end mb-4">
               <button @click="showAddAccountModal = true" class="btn btn-sm btn-outline">
@@ -204,6 +209,7 @@ interface MoneyPlan {
   isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
+  notes: string;
 }
 
 interface Toast {
@@ -268,6 +274,7 @@ const GET_MONEY_PLANS = `
           initialBalance
           remainingBalance
           timestamp
+          notes
         }
       }
     }

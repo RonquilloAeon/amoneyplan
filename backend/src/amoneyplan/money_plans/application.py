@@ -72,7 +72,8 @@ class MoneyPlanner(Application):
 
         # Look for the most recent plan (limit=1, desc=True)
         for _, plan in self.get_plans(limit=1, desc=True):
-            if not plan.committed:
+            # Only consider plan as current if it's both uncommitted and not archived
+            if not plan.committed and not plan.is_archived:
                 return plan.id
         return None
 

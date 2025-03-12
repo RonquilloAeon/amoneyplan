@@ -761,3 +761,55 @@ class TestGraphQLAPI:
         assert edges[2]["node"]["initialBalance"] == 1000.0
         assert edges[0]["node"]["isArchived"]  # Plan 3 is archived
         assert all(edge["node"]["isCommitted"] for edge in edges)
+
+    def test_can_create_plan_after_archiving_uncommitted(self, client, money_planner):
+        """Test that we can create a new plan after archiving an uncommitted one."""
+        # Create first plan (will be uncommitted)
+        plan1_id = self.create_money_plan(client, 1000.0, "Plan 1")
+
+        # Archive the uncommitted plan
+        archive_mutation = """
+        mutation ArchivePlan($input: ArchivePlanInput!) {
+            moneyPlan {
+                archivePlan(input: $input) {
+                    success
+                    error {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        archive_result = self.execute_query(client, archive_mutation, {"input": {"planId": plan1_id}})
+        assert archive_result["moneyPlan"]["archivePlan"]["success"]
+
+        # Try to create a new plan - should succeed now
+        create_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    error {
+                        message
+                    }
+                    success
+                    moneyPlan {
+                        id
+                        initialBalance
+                        remainingBalance
+                        isArchived
+                        isCommitted
+                    }
+                }
+            }
+        }
+        """
+        result = self.execute_query(
+            client,
+            create_mutation,
+            {"input": {"initialBalance": 2000.0, "notes": "Plan 2"}},
+        )
+        assert "errors" not in result
+        assert result["moneyPlan"]["startPlan"]["success"]
+        assert result["moneyPlan"]["startPlan"]["moneyPlan"]["initialBalance"] == 2000.0
+        assert not result["moneyPlan"]["startPlan"]["moneyPlan"]["isArchived"]
+        assert not result["moneyPlan"]["startPlan"]["moneyPlan"]["isCommitted"]

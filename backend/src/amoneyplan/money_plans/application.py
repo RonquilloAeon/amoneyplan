@@ -4,11 +4,10 @@ Application service for managing Money Plans.
 
 import logging
 from dataclasses import asdict
-from typing import List, Optional, Union
-from uuid import UUID
+from typing import Iterator, List, Optional, Union
+from uuid import NAMESPACE_URL, UUID, uuid5
 
-from django.core.cache import cache
-from eventsourcing.application import AggregateNotFoundError, Application
+from eventsourcing.application import AggregateNotFoundError, Application, EventSourcedLog
 from eventsourcing.persistence import Transcoding
 from eventsourcing.system import ProcessingEvent
 
@@ -17,15 +16,11 @@ from amoneyplan.domain.money_plan import (
     AccountAllocationConfig,
     BucketConfig,
     MoneyPlan,
+    MoneyPlanLogged,
     PlanAlreadyCommittedError,
 )
 
 logger = logging.getLogger("amoneyplan")
-
-
-def get_current_plan_cache_key(user_id: str) -> str:
-    """Get the cache key for storing the current plan ID for a user."""
-    return f"money_planner_current_plan_id:{user_id}"
 
 
 class BucketConfigTranscoding(Transcoding):
@@ -62,27 +57,25 @@ class MoneyPlanner(Application):
     def __init__(self, env):
         super().__init__(env)
         self.user_id = None  # Will be set by the GraphQL context
+        self.plan_log: EventSourcedLog[MoneyPlanLogged] = EventSourcedLog(
+            self.events, uuid5(NAMESPACE_URL, "/money_plan_log"), MoneyPlanLogged
+        )
 
     def register_transcodings(self, transcoder):
         super().register_transcodings(transcoder)
         transcoder.register(BucketConfigTranscoding())
 
     def _get_current_plan_id(self) -> Optional[UUID]:
-        """Get the current plan ID from cache."""
+        """Get the current uncommitted plan ID by checking the most recent plans."""
         if not self.user_id:
             return None
-        plan_id = cache.get(get_current_plan_cache_key(self.user_id))
-        return UUID(plan_id) if plan_id else None
 
-    def _set_current_plan_id(self, plan_id: Optional[UUID]) -> None:
-        """Set the current plan ID in cache."""
-        if not self.user_id:
-            return
-        cache_key = get_current_plan_cache_key(self.user_id)
-        if plan_id:
-            cache.set(cache_key, str(plan_id))
-        else:
-            cache.delete(cache_key)
+        # Look for the most recent plan (limit=1, desc=True)
+        for _, plan in self.get_plans(limit=1, desc=True):
+            # Only consider plan as current if it's both uncommitted and not archived
+            if not plan.committed and not plan.is_archived:
+                return plan.id
+        return None
 
     def create_plan(
         self,
@@ -113,17 +106,17 @@ class MoneyPlanner(Application):
                     raise PlanAlreadyCommittedError(
                         "There is already an uncommitted plan. Commit it before creating a new one."
                     )
-            except (KeyError, AggregateNotFoundError):
-                # Plan doesn't exist anymore or isn't found, clear the reference
-                self._set_current_plan_id(None)
+            except AggregateNotFoundError:
+                # Plan doesn't exist anymore, we can proceed
+                pass
 
         # Create new plan
         plan = MoneyPlan()
         plan.start_plan(initial_balance=initial_balance, default_allocations=default_allocations, notes=notes)
+        plan_logged = self.plan_log.trigger_event(plan_id=plan.id)
 
-        # Save the plan and update current plan ID
-        self.save(plan)
-        self._set_current_plan_id(plan.id)
+        # Save the plan
+        self.save(plan, plan_logged)
 
         return plan.id
 
@@ -154,14 +147,8 @@ class MoneyPlanner(Application):
             return None
 
         try:
-            plan = self.get_plan(current_plan_id)
-            # Clear current plan reference if it's committed
-            if plan.committed:
-                self._set_current_plan_id(None)
-            return plan
+            return self.get_plan(current_plan_id)
         except KeyError:
-            # Plan doesn't exist anymore
-            self._set_current_plan_id(None)
             return None
 
     def add_account(self, plan_id: UUID, name: str, buckets: Optional[List[BucketConfig]] = None) -> UUID:
@@ -297,42 +284,28 @@ class MoneyPlanner(Application):
         plan.commit_plan()
         self.save(plan)
 
-        # Clear current plan reference if this was the current plan
-        current_plan_id = self._get_current_plan_id()
-        if current_plan_id == plan_id:
-            self._set_current_plan_id(None)
+    def get_plans(
+        self,
+        *,
+        gt: int | None = None,
+        lte: int | None = None,
+        desc: bool = True,  # Default to descending (most recent first)
+        limit: int | None = None,
+    ) -> Iterator[tuple[int, MoneyPlan]]:
+        """Get money plans with their notification positions for cursor-based pagination.
 
-    def list_plans(self) -> List[UUID]:
-        """
-        List all Money Plan IDs.
+        Args:
+            gt: Return plans after this notification position
+            lte: Return plans up to and including this notification position
+            desc: Order by notification position descending (defaults to True for most recent first)
+            limit: Maximum number of plans to return
 
         Returns:
-            A list of Money Plan IDs ordered by creation time (most recent first)
+            Iterator of (position, plan) tuples where position can be used as a cursor
         """
-        # Use the events store to find all initial events (version 1) for plans
-        seen_plans = set()  # Track plans we've seen to avoid duplicates
-        plan_ids = []  # Preserve order while avoiding duplicates
-        # Get notifications in batches of 10 (default section size)
-        start = 1
-        while True:
-            try:
-                notifications = list(self.notification_log.select(start=start, limit=10))
-                if not notifications:
-                    break
-
-                # Process notifications in reverse order to get most recent first
-                for notification in reversed(notifications):
-                    if notification.originator_version == 1:  # Initial plan creation event
-                        if notification.originator_id not in seen_plans:
-                            plan_ids.append(notification.originator_id)
-                            seen_plans.add(notification.originator_id)
-
-                start += len(notifications)
-            except ValueError:
-                # We've reached the end of the log
-                break
-
-        return plan_ids
+        for notification in self.plan_log.get(gt=gt, lte=lte, desc=desc, limit=limit):
+            # Return both the notification position (for cursors) and the plan
+            yield notification.originator_version, self.get_plan(notification.plan_id)
 
     # Notification handlers for processing events
     def policy(self, domain_event: ProcessingEvent, process_event) -> None:

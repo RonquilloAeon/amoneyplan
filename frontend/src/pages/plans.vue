@@ -32,7 +32,7 @@
       <!-- Plans List -->
       <div class="grid gap-4 md:gap-6 px-3">
         <!-- Empty state when no plans -->
-        <div v-if="filteredPlans.length === 0" class="card bg-base-100 shadow-xl">
+        <div v-if="moneyPlans.length === 0" class="card bg-base-100 shadow-xl">
           <div class="card-body text-center py-6 md:py-10">
             <h2 class="card-title justify-center text-lg md:text-xl">No Money Plans Found</h2>
             <p class="text-sm md:text-base" v-if="filterStatus !== 'all'">
@@ -44,9 +44,9 @@
           </div>
         </div>
         
-        <!-- Display filtered plans -->
+        <!-- Display plans -->
         <MoneyPlanCard 
-          v-for="plan in filteredPlans" 
+          v-for="plan in moneyPlans" 
           :key="plan.id" 
           :plan="plan" 
         />
@@ -79,6 +79,7 @@ interface MoneyPlan {
   timestamp: string;
   accounts: Account[];
   isCommitted: boolean;
+  isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
 }
@@ -87,20 +88,9 @@ const showStartPlanDialog = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
 const filterStatus = ref('all'); // 'all', 'draft', or 'committed'
 
-// Computed property to filter plans based on selected status
-const filteredPlans = computed(() => {
-  if (filterStatus.value === 'all') {
-    return moneyPlans.value;
-  } else if (filterStatus.value === 'draft') {
-    return moneyPlans.value.filter(plan => !plan.isCommitted);
-  } else {
-    return moneyPlans.value.filter(plan => plan.isCommitted);
-  }
-});
-
 const GET_MONEY_PLANS = `
-  query moneyPlans {
-    moneyPlans {
+  query moneyPlans($filter: MoneyPlanFilter) {
+    moneyPlans(filter: $filter) {
       pageInfo {
         hasNextPage
         startCursor
@@ -118,6 +108,7 @@ const GET_MONEY_PLANS = `
             }
           }
           isCommitted
+          isArchived
           initialBalance
           remainingBalance
         }
@@ -126,7 +117,23 @@ const GET_MONEY_PLANS = `
   }
 `;
 
-const { data, error, executeQuery } = useQuery({ query: GET_MONEY_PLANS });
+// Create a computed property for the filter
+const currentFilter = computed(() => ({
+  status: filterStatus.value === 'all' ? null : filterStatus.value,
+  includeArchived: false // We could add a UI control for this later
+}));
+
+const { data, error, executeQuery } = useQuery({
+  query: GET_MONEY_PLANS,
+  variables: { filter: currentFilter },
+  // Add pause to prevent automatic execution
+  pause: true
+});
+
+// Watch for filter changes and rerun the query
+watchEffect(() => {
+  executeQuery({ filter: currentFilter.value });
+});
 
 watchEffect(() => {
   if (data.value) {
@@ -138,7 +145,7 @@ watchEffect(() => {
 });
 
 onMounted(() => {
-  executeQuery();
+  executeQuery({ filter: currentFilter.value });
 });
 
 const addPlan = (newPlan: MoneyPlan) => {

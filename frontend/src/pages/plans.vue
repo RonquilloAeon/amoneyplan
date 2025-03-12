@@ -49,11 +49,19 @@
           v-for="plan in moneyPlans" 
           :key="plan.id" 
           :plan="plan" 
+          @plan-archived="handlePlanArchived"
         />
       </div>
     </div>
     
     <StartPlanDialog v-if="showStartPlanDialog" @close="showStartPlanDialog = false" @planCreated="addPlan" />
+    
+    <!-- Toast notifications -->
+    <div class="toast toast-end" v-if="toast.show">
+      <div class="alert" :class="toast.type">
+        <span>{{ toast.message }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -84,9 +92,26 @@ interface MoneyPlan {
   remainingBalance: number;
 }
 
+interface Toast {
+  show: boolean;
+  message: string;
+  type: string;
+}
+
 const showStartPlanDialog = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
 const filterStatus = ref('all'); // 'all', 'draft', or 'committed'
+const toast = ref<Toast>({
+  show: false,
+  message: '',
+  type: 'alert-info'
+});
+
+// Create a computed property for the filter
+const currentFilter = computed(() => ({
+  status: filterStatus.value === 'all' ? null : filterStatus.value,
+  includeArchived: false // We could add a UI control for this later
+}));
 
 const GET_MONEY_PLANS = `
   query moneyPlans($filter: MoneyPlanFilter) {
@@ -117,12 +142,6 @@ const GET_MONEY_PLANS = `
   }
 `;
 
-// Create a computed property for the filter
-const currentFilter = computed(() => ({
-  status: filterStatus.value === 'all' ? null : filterStatus.value,
-  includeArchived: false // We could add a UI control for this later
-}));
-
 const { data, error, executeQuery } = useQuery({
   query: GET_MONEY_PLANS,
   variables: { filter: currentFilter },
@@ -141,6 +160,7 @@ watchEffect(() => {
   }
   if (error.value) {
     console.error(error.value);
+    showToast('Failed to load money plans', 'alert-error');
   }
 });
 
@@ -151,6 +171,25 @@ onMounted(() => {
 const addPlan = (newPlan: MoneyPlan) => {
   moneyPlans.value.push(newPlan);
 };
+
+function handlePlanArchived(updatedPlan: MoneyPlan) {
+  // Show success message
+  showToast('Plan archived successfully', 'alert-success');
+  
+  // Refresh the plans list
+  executeQuery({ filter: currentFilter.value });
+}
+
+function showToast(message: string, type: string = 'alert-info', duration: number = 3000) {
+  toast.value = {
+    show: true,
+    message,
+    type
+  };
+  setTimeout(() => {
+    toast.value.show = false;
+  }, duration);
+}
 </script>
 
 <style scoped>

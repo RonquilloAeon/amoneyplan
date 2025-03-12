@@ -33,8 +33,21 @@
               <h2 class="card-title text-base md:text-lg">
                 <PlanDate :timestamp="draftPlan.timestamp" />
               </h2>
-              <div class="badge badge-md md:badge-lg badge-ghost">
-                Draft
+              <div class="flex gap-2 items-center">
+                <div class="badge badge-md md:badge-lg badge-ghost">
+                  Draft
+                </div>
+                <button 
+                  @click="archivePlan"
+                  class="btn btn-sm btn-square btn-ghost"
+                  :class="{'loading': isArchivingPlan}"
+                  :disabled="isArchivingPlan"
+                  title="Archive plan"
+                >
+                  <svg v-if="!isArchivingPlan" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m8.25 3v6.75m0-6.75h-3m3 0h3M12 3v1.5m-2.25 0h4.5" />
+                  </svg>
+                </button>
               </div>
             </div>
             
@@ -199,10 +212,27 @@ interface Toast {
   type: string;
 }
 
+const ARCHIVE_PLAN = `
+  mutation archivePlan($input: ArchivePlanInput!) {
+    moneyPlan {
+      archivePlan(input: $input) {
+        error {
+          message
+        }
+        success
+        moneyPlan {
+          isArchived
+        }
+      }
+    }
+  }
+`;
+
 const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
 const isCommittingPlan = ref(false);
+const isArchivingPlan = ref(false);
 const toast = ref<Toast>({
   show: false,
   message: '',
@@ -270,6 +300,7 @@ const { data, error, executeQuery } = useQuery({
 });
 
 const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
+const { executeMutation: executeArchivePlan } = useMutation(ARCHIVE_PLAN);
 
 watchEffect(() => {
   if (data.value) {
@@ -344,6 +375,34 @@ async function commitPlan() {
     showToast('An error occurred while committing the plan', 'alert-error');
   } finally {
     isCommittingPlan.value = false;
+  }
+}
+
+// Archive the current draft plan
+async function archivePlan() {
+  if (!draftPlan.value || isArchivingPlan.value) return;
+  
+  isArchivingPlan.value = true;
+  try {
+    const result = await executeArchivePlan({
+      input: {
+        planId: draftPlan.value.id
+      }
+    });
+
+    if (result.data?.moneyPlan?.archivePlan?.success) {
+      showToast('Plan archived successfully', 'alert-success');
+      // Refresh the plans list to remove the archived draft
+      executeQuery();
+    } else {
+      const errorMessage = result.data?.moneyPlan?.archivePlan?.error?.message || 'Failed to archive plan';
+      showToast(errorMessage, 'alert-error');
+    }
+  } catch (e) {
+    console.error('Error archiving plan:', e);
+    showToast('An error occurred while archiving the plan', 'alert-error');
+  } finally {
+    isArchivingPlan.value = false;
   }
 }
 </script>

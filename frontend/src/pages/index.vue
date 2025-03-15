@@ -165,9 +165,10 @@
     
     <!-- Add Account Modal -->
     <AddAccountModal 
-      v-if="showAddAccountModal && draftPlan" 
+      v-if="draftPlan" 
       :planId="draftPlan.id"
       :currentRemainingBalance="draftPlan.remainingBalance"
+      :isOpen="showAddAccountModal"
       @close="showAddAccountModal = false" 
       @accountAdded="handleAccountAdded" 
     />

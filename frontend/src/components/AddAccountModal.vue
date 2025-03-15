@@ -1,5 +1,5 @@
 <template>
-  <dialog id="add-account-modal" class="modal modal-open">
+  <dialog ref="dialogRef" id="add-account-modal" class="modal" :class="{ 'modal-open': isOpen }">
     <div class="modal-box relative max-w-md w-11/12">
       <h3 class="font-bold text-lg mb-4">Add Account</h3>
       
@@ -97,6 +97,7 @@
                 <option value="Rent">Rent</option>
                 <option value="Savings">Savings</option>
                 <option value="Subscriptions">Subscriptions</option>
+                <option value="Taxes">Travel</option>
                 <option value="Transportation">Transportation</option>
                 <option value="Travel">Travel</option>
                 <option value="Unexpected">Unexpected</option>
@@ -151,23 +152,46 @@
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="$emit('close')">✕</button>
       </form>
     </div>
-    <form method="dialog" class="modal-backdrop">
-      <button @click="$emit('close')">close</button>
+    <form method="dialog" class="modal-backdrop" @submit="$emit('close')">
+      <button>close</button>
     </form>
   </dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useMutation } from '@urql/vue';
 import gql from 'graphql-tag';
 
+const dialogRef = ref<HTMLDialogElement | null>(null);
 const emit = defineEmits(['close', 'accountAdded']);
 
 const props = defineProps<{
   planId: string;
   currentRemainingBalance: number;
+  isOpen: boolean;
 }>();
+
+// Watch for isOpen changes to show/close the dialog
+watch(() => props.isOpen, (newValue) => {
+  if (!dialogRef.value) return;
+  
+  if (newValue) {
+    dialogRef.value.showModal();
+  } else {
+    dialogRef.value.close();
+    resetForm();
+  }
+});
+
+// Close dialog when clicking outside or pressing escape
+onMounted(() => {
+  if (!dialogRef.value) return;
+  
+  dialogRef.value.addEventListener('close', () => {
+    emit('close');
+  });
+});
 
 // Form state
 const accountName = ref('');
@@ -283,15 +307,34 @@ async function addAccount() {
       return;
     }
     
-    // Success! Emit event to update the parent
+    // Success! Reset form and emit events
     emit('accountAdded', response.data.moneyPlan.addAccount.moneyPlan);
-    emit('close');
+    if (dialogRef.value) {
+      dialogRef.value.close();
+    }
   } catch (error) {
     errorMessage.value = (error as Error).message;
   } finally {
     isSaving.value = false;
   }
 }
+
+function resetForm() {
+  accountName.value = '';
+  buckets.value = [{
+    bucketName: '',
+    category: '',
+    allocatedAmount: 0
+  }];
+  errorMessage.value = '';
+}
+
+// Reset form when modal closes
+watch(() => props.isOpen, (newValue) => {
+  if (!newValue) {
+    resetForm();
+  }
+});
 </script>
 
 <style scoped>

@@ -16,15 +16,10 @@
                   :class="filterStatus === 'all' ? 'btn-primary' : 'btn-outline'">
             All
           </button>
-          <button @click="filterStatus = 'draft'" 
+          <button @click="filterStatus = 'archived'" 
                   class="btn btn-sm" 
-                  :class="filterStatus === 'draft' ? 'btn-primary' : 'btn-outline'">
-            Drafts
-          </button>
-          <button @click="filterStatus = 'committed'" 
-                  class="btn btn-sm" 
-                  :class="filterStatus === 'committed' ? 'btn-primary' : 'btn-outline'">
-            Committed
+                  :class="filterStatus === 'archived' ? 'btn-primary' : 'btn-outline'">
+            Archived
           </button>
         </div>
       </div>
@@ -101,7 +96,7 @@ interface Toast {
 
 const showStartPlanDialog = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
-const filterStatus = ref('all'); // 'all', 'draft', or 'committed'
+const filterStatus = ref('all'); // 'all' or 'archived'
 const toast = ref<Toast>({
   show: false,
   message: '',
@@ -110,8 +105,8 @@ const toast = ref<Toast>({
 
 // Create a computed property for the filter
 const currentFilter = computed(() => ({
-  status: filterStatus.value === 'all' ? null : filterStatus.value,
-  includeArchived: false // We could add a UI control for this later
+  includeArchived: filterStatus.value === 'archived',
+  status: null // We don't filter by draft/committed status anymore
 }));
 
 const GET_MONEY_PLANS = `

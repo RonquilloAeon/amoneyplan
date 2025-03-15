@@ -130,12 +130,12 @@ const { executeMutation } = useMutation(ARCHIVE_PLAN_MUTATION);
 
 function getBadgeClass() {
   if (props.plan.isArchived) return 'badge-ghost';
-  return props.plan.isCommitted ? 'badge-primary' : 'badge-ghost';
+  return props.plan.isCommitted ? '' : 'badge-ghost';
 }
 
 function getPlanStatus() {
   if (props.plan.isArchived) return 'Archived';
-  return props.plan.isCommitted ? 'Committed' : 'Draft';
+  return 'Draft';
 }
 
 async function archivePlan() {

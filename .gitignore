@@ -1,5 +1,5 @@
 # Development
-.postgres-data/
+.postgresql/
 *.pyc
 __pycache__/
 node_modules/

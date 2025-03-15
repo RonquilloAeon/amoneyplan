@@ -54,6 +54,11 @@ resource "kind_cluster" "amoneyplan" {
         protocol       = "TCP"
       }
 
+      extra_mounts {
+        host_path      = "${path.root}/../../.postgresql"
+        container_path = "/var/lib/postgresql/data"
+      }
+
       # Add source code mounting for hot reload
       extra_mounts {
         host_path      = "${path.root}/../../backend/src"

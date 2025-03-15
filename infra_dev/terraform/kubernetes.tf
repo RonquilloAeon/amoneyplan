@@ -1,8 +1,6 @@
 resource "kubernetes_deployment" "postgres" {
   depends_on = [
-    kubernetes_namespace.amoneyplan,
-    kubernetes_persistent_volume.postgres,
-    kubernetes_persistent_volume_claim.postgres
+    kubernetes_namespace.amoneyplan
   ]
 
   metadata {
@@ -49,8 +47,9 @@ resource "kubernetes_deployment" "postgres" {
 
         volume {
           name = "postgres-data"
-          persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.postgres.metadata[0].name
+          host_path {
+            path = "/var/lib/postgresql/data"
+            type = "Directory"
           }
         }
       }

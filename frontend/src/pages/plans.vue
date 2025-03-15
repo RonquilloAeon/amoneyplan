@@ -142,8 +142,7 @@ const GET_MONEY_PLANS = `
 const { data, error, executeQuery } = useQuery({
   query: GET_MONEY_PLANS,
   variables: { filter: currentFilter },
-  // Add pause to prevent automatic execution
-  pause: true
+  requestPolicy: 'cache-and-network' // This will ensure we get fresh data while showing cached data
 });
 
 // Watch for filter changes and rerun the query
@@ -165,8 +164,14 @@ onMounted(() => {
   executeQuery({ filter: currentFilter.value });
 });
 
-const addPlan = (newPlan: MoneyPlan) => {
-  moneyPlans.value.push(newPlan);
+const addPlan = () => {
+  // Show success message
+  showToast('Plan created successfully', 'alert-success');
+  // Force a refresh of the data
+  executeQuery({ 
+    filter: currentFilter.value,
+    requestPolicy: 'network-only' // Force fresh data from server
+  });
 };
 
 function handlePlanArchived(_updatedPlan: MoneyPlan) {

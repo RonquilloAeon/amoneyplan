@@ -57,11 +57,22 @@ const START_PLAN_MUTATION = gql`
         error {
           message
         }
+        success
         moneyPlan {
           id
+          timestamp
+          notes
+          accounts {
+            name
+            buckets {
+              bucketName
+              allocatedAmount
+            }
+          }
+          isCommitted
+          isArchived
           initialBalance
           remainingBalance
-          timestamp
         }
       }
     }

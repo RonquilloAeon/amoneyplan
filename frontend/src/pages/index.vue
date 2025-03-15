@@ -248,7 +248,7 @@ const toast = ref<Toast>({
 
 // Computed property to get the first draft plan (if any)
 const draftPlan = computed(() => {
-  return moneyPlans.value.find(plan => !plan.isCommitted);
+  return moneyPlans.value.find(plan => !plan.isCommitted && !plan.isArchived);
 });
 
 const GET_MONEY_PLANS = `
@@ -302,9 +302,10 @@ const { data, error, executeQuery } = useQuery({
   query: GET_MONEY_PLANS,
   variables: { 
     filter: {
-      status: 'draft'  // Only show draft plans on the home page
+      includeArchived: false // Only show unarchived plans
     }
-  }
+  },
+  requestPolicy: 'cache-and-network'
 });
 
 const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
@@ -324,8 +325,11 @@ onMounted(() => {
   executeQuery();
 });
 
-const addPlan = (newPlan: MoneyPlan) => {
-  moneyPlans.value.push(newPlan);
+const addPlan = (_newPlan: MoneyPlan) => {
+  // Show success message
+  showToast('Plan created successfully!', 'alert-success');
+  // Force refresh from network to get the new plan
+  executeQuery({ requestPolicy: 'network-only' });
 };
 
 function handleAccountAdded(updatedPlan: MoneyPlan) {

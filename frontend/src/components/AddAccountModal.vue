@@ -270,6 +270,7 @@ const ADD_ACCOUNT_MUTATION = gql`
           }
           initialBalance
           remainingBalance
+          timestamp
         }
       }
     }

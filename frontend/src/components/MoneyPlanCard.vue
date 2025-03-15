@@ -135,7 +135,7 @@ function getBadgeClass() {
 
 function getPlanStatus() {
   if (props.plan.isArchived) return 'Archived';
-  return 'Draft';
+  return props.plan.isCommitted ? 'Committed' : 'Draft';
 }
 
 async function archivePlan() {

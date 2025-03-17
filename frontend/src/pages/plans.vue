@@ -11,10 +11,10 @@
       <!-- Filter/Sort Controls -->
       <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 px-4">
         <div class="flex gap-2">
-          <button @click="filterStatus = 'all'" 
+          <button @click="filterStatus = 'active'" 
                   class="btn btn-sm" 
-                  :class="filterStatus === 'all' ? 'btn-primary' : 'btn-outline'">
-            All
+                  :class="filterStatus === 'active' ? 'btn-primary' : 'btn-outline'">
+            Active
           </button>
           <button @click="filterStatus = 'archived'" 
                   class="btn btn-sm" 
@@ -30,7 +30,7 @@
         <div v-if="moneyPlans.length === 0" class="card bg-base-100 shadow-xl">
           <div class="card-body text-center py-6 md:py-10">
             <h2 class="card-title justify-center text-lg md:text-xl">No Money Plans Found</h2>
-            <p class="text-sm md:text-base" v-if="filterStatus !== 'all'">
+            <p class="text-sm md:text-base" v-if="filterStatus !== 'active'">
               No {{ filterStatus }} plans found. Try changing the filter or create a new plan.
             </p>
             <p class="text-sm md:text-base" v-else>
@@ -96,7 +96,7 @@ interface Toast {
 
 const showStartPlanDialog = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
-const filterStatus = ref('all'); // 'all' or 'archived'
+const filterStatus = ref('active'); // 'active' or 'archived'
 const toast = ref<Toast>({
   show: false,
   message: '',
@@ -105,7 +105,7 @@ const toast = ref<Toast>({
 
 // Create a computed property for the filter
 const currentFilter = computed(() => ({
-  includeArchived: filterStatus.value === 'archived',
+  isArchived: filterStatus.value === 'archived',
   status: null // We don't filter by draft/committed status anymore
 }));
 

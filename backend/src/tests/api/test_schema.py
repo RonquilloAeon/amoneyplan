@@ -670,13 +670,12 @@ class TestGraphQLAPI:
         assert edges[0]["node"]["notes"] == "Plan 2"
         assert not edges[0]["node"]["isArchived"]
 
-        # With includeArchived = true
-        result = self.execute_query(client, query, {"filter": {"includeArchived": True}})
+        # With is_archived = true - should only return archived plans
+        result = self.execute_query(client, query, {"filter": {"isArchived": True}})
         edges = result["moneyPlans"]["edges"]
-        assert len(edges) == 2
-        assert edges[0]["node"]["initialBalance"] == 2000.0  # Most recent first
-        assert edges[1]["node"]["initialBalance"] == 1000.0
-        assert edges[1]["node"]["isArchived"]  # Plan 1 is archived
+        assert len(edges) == 1  # Only plan 1 is archived
+        assert edges[0]["node"]["initialBalance"] == 1000.0
+        assert edges[0]["node"]["isArchived"]  # Plan 1 is archived
 
     def test_money_plans_with_filters(self, client, money_planner):
         """Test filtering money plans by status and archived state."""
@@ -741,26 +740,20 @@ class TestGraphQLAPI:
         assert edges[1]["node"]["initialBalance"] == 1000.0
         assert all(edge["node"]["isCommitted"] for edge in edges)
 
-        # Test include_archived=true
-        result = self.execute_query(client, query, {"filter": {"includeArchived": True}})
+        # Test is_archived=true (should only return archived plan 3)
+        result = self.execute_query(client, query, {"filter": {"isArchived": True}})
         edges = result["moneyPlans"]["edges"]
-        assert len(edges) == 3
-        assert edges[0]["node"]["initialBalance"] == 3000.0  # Most recent first
-        assert edges[1]["node"]["initialBalance"] == 2000.0
-        assert edges[2]["node"]["initialBalance"] == 1000.0
+        assert len(edges) == 1  # Only plan 3 is archived
+        assert edges[0]["node"]["initialBalance"] == 3000.0  # Plan 3
         assert edges[0]["node"]["isArchived"]  # Plan 3 is archived
 
-        # Test both filters together
-        result = self.execute_query(
-            client, query, {"filter": {"status": "committed", "includeArchived": True}}
-        )
+        # Test both filters together - should return only archived AND committed plans
+        result = self.execute_query(client, query, {"filter": {"status": "committed", "isArchived": True}})
         edges = result["moneyPlans"]["edges"]
-        assert len(edges) == 3  # All committed plans (including archived)
+        assert len(edges) == 1  # Only plan 3 is both archived and committed
         assert edges[0]["node"]["initialBalance"] == 3000.0  # Most recent first
-        assert edges[1]["node"]["initialBalance"] == 2000.0
-        assert edges[2]["node"]["initialBalance"] == 1000.0
-        assert edges[0]["node"]["isArchived"]  # Plan 3 is archived
-        assert all(edge["node"]["isCommitted"] for edge in edges)
+        assert edges[0]["node"]["isArchived"]
+        assert edges[0]["node"]["isCommitted"]
 
     def test_can_create_plan_after_archiving_uncommitted(self, client, money_planner):
         """Test that we can create a new plan after archiving an uncommitted one."""

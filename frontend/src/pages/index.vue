@@ -302,7 +302,7 @@ const { data, error, executeQuery } = useQuery({
   query: GET_MONEY_PLANS,
   variables: { 
     filter: {
-      includeArchived: false // Only show unarchived plans
+      isArchived: false // Only show non-archived plans
     }
   },
   requestPolicy: 'cache-and-network'

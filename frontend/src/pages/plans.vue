@@ -11,20 +11,15 @@
       <!-- Filter/Sort Controls -->
       <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 px-4">
         <div class="flex gap-2">
-          <button @click="filterStatus = 'all'" 
+          <button @click="filterStatus = 'active'" 
                   class="btn btn-sm" 
-                  :class="filterStatus === 'all' ? 'btn-primary' : 'btn-outline'">
-            All
+                  :class="filterStatus === 'active' ? 'btn-primary' : 'btn-outline'">
+            Active
           </button>
-          <button @click="filterStatus = 'draft'" 
+          <button @click="filterStatus = 'archived'" 
                   class="btn btn-sm" 
-                  :class="filterStatus === 'draft' ? 'btn-primary' : 'btn-outline'">
-            Drafts
-          </button>
-          <button @click="filterStatus = 'committed'" 
-                  class="btn btn-sm" 
-                  :class="filterStatus === 'committed' ? 'btn-primary' : 'btn-outline'">
-            Committed
+                  :class="filterStatus === 'archived' ? 'btn-primary' : 'btn-outline'">
+            Archived
           </button>
         </div>
       </div>
@@ -35,7 +30,7 @@
         <div v-if="moneyPlans.length === 0" class="card bg-base-100 shadow-xl">
           <div class="card-body text-center py-6 md:py-10">
             <h2 class="card-title justify-center text-lg md:text-xl">No Money Plans Found</h2>
-            <p class="text-sm md:text-base" v-if="filterStatus !== 'all'">
+            <p class="text-sm md:text-base" v-if="filterStatus !== 'active'">
               No {{ filterStatus }} plans found. Try changing the filter or create a new plan.
             </p>
             <p class="text-sm md:text-base" v-else>
@@ -49,11 +44,19 @@
           v-for="plan in moneyPlans" 
           :key="plan.id" 
           :plan="plan" 
+          @plan-archived="handlePlanArchived"
         />
       </div>
     </div>
     
     <StartPlanDialog v-if="showStartPlanDialog" @close="showStartPlanDialog = false" @planCreated="addPlan" />
+    
+    <!-- Toast notifications -->
+    <div class="toast toast-end" v-if="toast.show">
+      <div class="alert" :class="toast.type">
+        <span>{{ toast.message }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -82,11 +85,29 @@ interface MoneyPlan {
   isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
+  notes: string;
+}
+
+interface Toast {
+  show: boolean;
+  message: string;
+  type: string;
 }
 
 const showStartPlanDialog = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
-const filterStatus = ref('all'); // 'all', 'draft', or 'committed'
+const filterStatus = ref('active'); // 'active' or 'archived'
+const toast = ref<Toast>({
+  show: false,
+  message: '',
+  type: 'alert-info'
+});
+
+// Create a computed property for the filter
+const currentFilter = computed(() => ({
+  isArchived: filterStatus.value === 'archived',
+  status: null // We don't filter by draft/committed status anymore
+}));
 
 const GET_MONEY_PLANS = `
   query moneyPlans($filter: MoneyPlanFilter) {
@@ -100,6 +121,7 @@ const GET_MONEY_PLANS = `
         node {
           id
           timestamp
+          notes
           accounts {
             name
             buckets {
@@ -117,17 +139,10 @@ const GET_MONEY_PLANS = `
   }
 `;
 
-// Create a computed property for the filter
-const currentFilter = computed(() => ({
-  status: filterStatus.value === 'all' ? null : filterStatus.value,
-  includeArchived: false // We could add a UI control for this later
-}));
-
 const { data, error, executeQuery } = useQuery({
   query: GET_MONEY_PLANS,
   variables: { filter: currentFilter },
-  // Add pause to prevent automatic execution
-  pause: true
+  requestPolicy: 'cache-and-network' // This will ensure we get fresh data while showing cached data
 });
 
 // Watch for filter changes and rerun the query
@@ -141,6 +156,7 @@ watchEffect(() => {
   }
   if (error.value) {
     console.error(error.value);
+    showToast('Failed to load money plans', 'alert-error');
   }
 });
 
@@ -148,9 +164,34 @@ onMounted(() => {
   executeQuery({ filter: currentFilter.value });
 });
 
-const addPlan = (newPlan: MoneyPlan) => {
-  moneyPlans.value.push(newPlan);
+const addPlan = () => {
+  // Show success message
+  showToast('Plan created successfully', 'alert-success');
+  // Force a refresh of the data
+  executeQuery({ 
+    filter: currentFilter.value,
+    requestPolicy: 'network-only' // Force fresh data from server
+  });
 };
+
+function handlePlanArchived(_updatedPlan: MoneyPlan) {
+  // Show success message
+  showToast('Plan archived successfully', 'alert-success');
+  
+  // Refresh the plans list
+  executeQuery({ filter: currentFilter.value });
+}
+
+function showToast(message: string, type: string = 'alert-info', duration: number = 3000) {
+  toast.value = {
+    show: true,
+    message,
+    type
+  };
+  setTimeout(() => {
+    toast.value.show = false;
+  }, duration);
+}
 </script>
 
 <style scoped>

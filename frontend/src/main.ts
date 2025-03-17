@@ -1,27 +1,29 @@
-import { createApp } from 'vue';
-import './style.css';
-import App from './App.vue';
-import urql, { cacheExchange, fetchExchange } from '@urql/vue';
-import { createRouter, createWebHistory } from 'vue-router';
-import IndexPage from './pages/index.vue';
-import PlansPage from './pages/plans.vue';
+import { createApp } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import urql, { createClient, cacheExchange, fetchExchange } from '@urql/vue'
+import App from './App.vue'
+import './style.css'
 
-const app = createApp(App);
+// Import pages
+import IndexPage from './pages/index.vue'
+import PlansPage from './pages/plans.vue'
 
-app.use(urql, {
-  url: 'http://localhost:8001/graphql/',
-  exchanges: [cacheExchange, fetchExchange]
-});
-
-const routes = [
-  { path: '/', component: IndexPage },
-  { path: '/plans', component: PlansPage }
-];
-
+// Create router
 const router = createRouter({
   history: createWebHistory(),
-  routes
-});
+  routes: [
+    { path: '/', component: IndexPage },
+    { path: '/plans', component: PlansPage },
+  ],
+})
 
-app.use(router);
-app.mount('#app');
+// Create urql client
+const client = createClient({
+  url: 'http://localhost:8001/graphql/',
+  exchanges: [cacheExchange, fetchExchange],
+})
+
+const app = createApp(App)
+app.use(router)
+app.use(urql, client) // Use the proper URQL Vue plugin setup
+app.mount('#app')

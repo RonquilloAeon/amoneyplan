@@ -33,8 +33,21 @@
               <h2 class="card-title text-base md:text-lg">
                 <PlanDate :timestamp="draftPlan.timestamp" />
               </h2>
-              <div class="badge badge-md md:badge-lg badge-ghost">
-                Draft
+              <div class="flex gap-2 items-center">
+                <div class="badge badge-md md:badge-lg badge-ghost">
+                  Draft
+                </div>
+                <button 
+                  @click="archivePlan"
+                  class="btn btn-sm btn-square btn-ghost"
+                  :class="{'loading': isArchivingPlan}"
+                  :disabled="isArchivingPlan"
+                  title="Archive this draft plan if you no longer need it"
+                >
+                  <svg v-if="!isArchivingPlan" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m8.25 3v6.75m0-6.75h-3m3 0h3M12 3v1.5m-2.25 0h4.5" />
+                  </svg>
+                </button>
               </div>
             </div>
             
@@ -50,6 +63,11 @@
                   ${{ draftPlan.remainingBalance }}
                 </div>
               </div>
+            </div>
+
+            <!-- Display notes if they exist -->
+            <div v-if="draftPlan.notes" class="mb-4 text-sm md:text-base text-base-content/80">
+              {{ draftPlan.notes }}
             </div>
 
             <!-- Add Account button -->
@@ -147,9 +165,10 @@
     
     <!-- Add Account Modal -->
     <AddAccountModal 
-      v-if="showAddAccountModal && draftPlan" 
+      v-if="draftPlan" 
       :planId="draftPlan.id"
       :currentRemainingBalance="draftPlan.remainingBalance"
+      :isOpen="showAddAccountModal"
       @close="showAddAccountModal = false" 
       @accountAdded="handleAccountAdded" 
     />
@@ -191,6 +210,7 @@ interface MoneyPlan {
   isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
+  notes: string;
 }
 
 interface Toast {
@@ -199,10 +219,27 @@ interface Toast {
   type: string;
 }
 
+const ARCHIVE_PLAN = `
+  mutation archivePlan($input: ArchivePlanInput!) {
+    moneyPlan {
+      archivePlan(input: $input) {
+        error {
+          message
+        }
+        success
+        moneyPlan {
+          isArchived
+        }
+      }
+    }
+  }
+`;
+
 const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
 const moneyPlans = ref<MoneyPlan[]>([]);
 const isCommittingPlan = ref(false);
+const isArchivingPlan = ref(false);
 const toast = ref<Toast>({
   show: false,
   message: '',
@@ -211,7 +248,7 @@ const toast = ref<Toast>({
 
 // Computed property to get the first draft plan (if any)
 const draftPlan = computed(() => {
-  return moneyPlans.value.find(plan => !plan.isCommitted);
+  return moneyPlans.value.find(plan => !plan.isCommitted && !plan.isArchived);
 });
 
 const GET_MONEY_PLANS = `
@@ -238,6 +275,7 @@ const GET_MONEY_PLANS = `
           initialBalance
           remainingBalance
           timestamp
+          notes
         }
       }
     }
@@ -264,12 +302,14 @@ const { data, error, executeQuery } = useQuery({
   query: GET_MONEY_PLANS,
   variables: { 
     filter: {
-      status: 'draft'  // Only show draft plans on the home page
+      isArchived: false // Only show non-archived plans
     }
-  }
+  },
+  requestPolicy: 'cache-and-network'
 });
 
 const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
+const { executeMutation: executeArchivePlan } = useMutation(ARCHIVE_PLAN);
 
 watchEffect(() => {
   if (data.value) {
@@ -285,8 +325,11 @@ onMounted(() => {
   executeQuery();
 });
 
-const addPlan = (newPlan: MoneyPlan) => {
-  moneyPlans.value.push(newPlan);
+const addPlan = (_newPlan: MoneyPlan) => {
+  // Show success message
+  showToast('Plan created successfully!', 'alert-success');
+  // Force refresh from network to get the new plan
+  executeQuery({ requestPolicy: 'network-only' });
 };
 
 function handleAccountAdded(updatedPlan: MoneyPlan) {
@@ -344,6 +387,36 @@ async function commitPlan() {
     showToast('An error occurred while committing the plan', 'alert-error');
   } finally {
     isCommittingPlan.value = false;
+  }
+}
+
+// Archive the current draft plan
+async function archivePlan() {
+  if (!draftPlan.value || isArchivingPlan.value) return;
+  
+  isArchivingPlan.value = true;
+  try {
+    const result = await executeArchivePlan({
+      input: {
+        planId: draftPlan.value.id
+      }
+    });
+
+    if (result.data?.moneyPlan?.archivePlan?.success) {
+      showToast('Plan archived successfully', 'alert-success');
+      // Clear the plans list since archived plan is no longer a draft
+      moneyPlans.value = [];
+      // Refresh the query to make sure we get any other draft plans
+      executeQuery();
+    } else {
+      const errorMessage = result.data?.moneyPlan?.archivePlan?.error?.message || 'Failed to archive plan';
+      showToast(errorMessage, 'alert-error');
+    }
+  } catch (e) {
+    console.error('Error archiving plan:', e);
+    showToast('An error occurred while archiving the plan', 'alert-error');
+  } finally {
+    isArchivingPlan.value = false;
   }
 }
 </script>

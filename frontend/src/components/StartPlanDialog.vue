@@ -11,6 +11,8 @@
           <input 
             v-model="initialBalance" 
             type="number" 
+            step="0.01"
+            min="1.00"
             class="input input-bordered input-sm md:input-md w-full" 
             required 
           />
@@ -18,12 +20,11 @@
         
         <div class="form-control w-full mb-4 md:mb-6">
           <label class="label py-1">
-            <span class="label-text text-sm md:text-base">Notes</span>
+            <span class="label-text text-sm md:text-base">Notes (optional)</span>
           </label>
           <textarea 
             v-model="notes" 
-            class="textarea textarea-bordered textarea-sm md:textarea-md h-16 md:h-24 text-sm md:text-base" 
-            required
+            class="textarea textarea-bordered textarea-sm md:textarea-md h-16 md:h-24 text-sm md:text-base"
           ></textarea>
         </div>
         
@@ -56,8 +57,20 @@ const START_PLAN_MUTATION = gql`
         error {
           message
         }
+        success
         moneyPlan {
           id
+          timestamp
+          notes
+          accounts {
+            name
+            buckets {
+              bucketName
+              allocatedAmount
+            }
+          }
+          isCommitted
+          isArchived
           initialBalance
           remainingBalance
         }

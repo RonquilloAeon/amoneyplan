@@ -214,7 +214,7 @@ class ArchivePlanInput:
 class MoneyPlanFilter:
     """Input type for filtering money plans."""
 
-    include_archived: bool = False
+    is_archived: bool = False
     status: Optional[str] = None  # 'all', 'draft', or 'committed'
 
 
@@ -266,16 +266,7 @@ class Query:
             # Use descending order by default, switch to ascending only if using 'last'
             desc = not bool(last)
 
-            # NOTE: Since we store plans in ascending order (1,2,3...), but want to display in
-            # descending order (most recent first), we need to adjust our gt/lte logic:
-            #
-            # For desc=True (default, most recent first):
-            # - after=5 means "get plans with position < 5"
-            # - before=5 means "get plans with position >= 5"
-            #
-            # For desc=False (when using last):
-            # - after=5 means "get plans with position > 5"
-            # - before=5 means "get plans with position <= 5"
+            # When displaying in descending order (most recent first), we need to adjust our gt/lte logic
             if desc:
                 # When desc=True, swap gt/lte logic
                 gt_pos = None
@@ -289,8 +280,11 @@ class Query:
 
             # Apply filters if provided
             if filter:
-                # Filter archived plans
-                if not filter.include_archived:
+                if filter.is_archived:
+                    # When is_archived is true, show only archived plans
+                    plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if plan.is_archived]
+                else:
+                    # When is_archived is false, show only non-archived plans
                     plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.is_archived]
 
                 # Filter by status if specified
@@ -301,7 +295,7 @@ class Query:
                         plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if plan.committed]
                     # 'all' requires no filtering
             else:
-                # Default behavior: exclude archived plans
+                # Default behavior when no filter is provided: show only non-archived plans
                 plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.is_archived]
 
             # If using 'last', we need to reverse the results since we got them in ascending order

@@ -5,8 +5,22 @@
         <h2 class="card-title text-base md:text-lg">
           <PlanDate :timestamp="plan.timestamp" />
         </h2>
-        <div class="badge badge-md md:badge-lg" :class="plan.isCommitted ? 'badge-primary' : 'badge-ghost'">
-          {{ plan.isCommitted ? 'Committed' : 'Draft' }}
+        <div class="flex gap-2 items-center">
+          <div class="badge badge-md md:badge-lg" :class="getBadgeClass()">
+            {{ getPlanStatus() }}
+          </div>
+          <button 
+            v-if="!plan.isArchived" 
+            @click="archivePlan" 
+            class="btn btn-sm btn-square btn-ghost"
+            :class="{'loading': isArchiving}"
+            :disabled="isArchiving"
+            :title="getArchiveTooltip()"
+          >
+            <svg v-if="!isArchiving" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m8.25 3v6.75m0-6.75h-3m3 0h3M12 3v1.5m-2.25 0h4.5" />
+            </svg>
+          </button>
         </div>
       </div>
       
@@ -22,6 +36,11 @@
             ${{ plan.remainingBalance }}
           </div>
         </div>
+      </div>
+
+      <!-- Display notes if they exist -->
+      <div v-if="plan.notes" class="mb-4 text-sm md:text-base text-base-content/80">
+        {{ plan.notes }}
       </div>
       
       <div class="divider my-1 md:my-2">Accounts</div>
@@ -57,6 +76,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
+import { useMutation } from '@urql/vue';
 import PlanDate from './PlanDate.vue';
 
 interface Bucket {
@@ -74,16 +95,81 @@ interface MoneyPlan {
   timestamp: string;
   accounts: Account[];
   isCommitted: boolean;
+  isArchived: boolean;
   initialBalance: number;
   remainingBalance: number;
+  notes: string;
 }
 
-// Define props
-defineProps<{
+const props = defineProps<{
   plan: MoneyPlan
 }>();
-</script>
 
-<style scoped>
-/* Add any scoped styles here */
-</style>
+const emit = defineEmits(['planArchived']);
+
+const isArchiving = ref(false);
+
+const ARCHIVE_PLAN_MUTATION = `
+  mutation archivePlan($input: ArchivePlanInput!) {
+    moneyPlan {
+      archivePlan(input: $input) {
+        success
+        error {
+          message
+        }
+        moneyPlan {
+          id
+          isArchived
+        }
+      }
+    }
+  }
+`;
+
+const { executeMutation } = useMutation(ARCHIVE_PLAN_MUTATION);
+
+function getBadgeClass() {
+  if (props.plan.isArchived) return 'badge-ghost';
+  return props.plan.isCommitted ? '' : 'badge-ghost';
+}
+
+function getPlanStatus() {
+  if (props.plan.isArchived) return 'Archived';
+  return props.plan.isCommitted ? 'Committed' : 'Draft';
+}
+
+async function archivePlan() {
+  if (isArchiving.value) return;
+  
+  isArchiving.value = true;
+  try {
+    const result = await executeMutation({
+      input: {
+        planId: props.plan.id
+      }
+    });
+
+    if (result.error) {
+      console.error('Error archiving plan:', result.error);
+      return;
+    }
+
+    if (result.data?.moneyPlan?.archivePlan?.success) {
+      emit('planArchived', result.data.moneyPlan.archivePlan.moneyPlan);
+    } else {
+      console.error('Failed to archive plan:', result.data?.moneyPlan?.archivePlan?.error?.message);
+    }
+  } catch (e) {
+    console.error('Error archiving plan:', e);
+  } finally {
+    isArchiving.value = false;
+  }
+}
+
+function getArchiveTooltip() {
+  if (props.plan.isCommitted) {
+    return "Archive this committed plan to hide it from the default view";
+  }
+  return "Archive this draft plan if you no longer need it";
+}
+</script>

@@ -211,6 +211,12 @@ class ArchivePlanInput:
 
 
 @strawberry.input
+class RemoveAccountInput:
+    plan_id: relay.GlobalID
+    account_id: relay.GlobalID
+
+
+@strawberry.input
 class MoneyPlanFilter:
     """Input type for filtering money plans."""
 
@@ -460,15 +466,14 @@ class MoneyPlanMutations:
         Adjust the overall plan balance.
         """
         service = apps.get_app_config("money_plans").money_planner
+        plan_id = UUID(input.plan_id.node_id)
         # Set user ID from request context
         service.user_id = str(info.context.request.user.id)
 
         try:
-            service.adjust_plan_balance(
-                plan_id=UUID(input.plan_id), adjustment=input.adjustment, reason=input.reason
-            )
+            service.adjust_plan_balance(plan_id=plan_id, adjustment=input.adjustment, reason=input.reason)
 
-            plan = service.get_plan(UUID(input.plan_id))
+            plan = service.get_plan(plan_id)
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
@@ -484,14 +489,15 @@ class MoneyPlanMutations:
 
         try:
             bucket_configs = [config.to_domain() for config in input.new_bucket_config]
+            plan_id = UUID(input.plan_id.node_id)
 
             service.change_account_configuration(
-                plan_id=UUID(input.plan_id),
-                account_id=input.account_id,
+                plan_id=plan_id,
+                account_id=UUID(input.account_id.node_id),
                 new_bucket_config=bucket_configs,
             )
 
-            plan = service.get_plan(UUID(input.plan_id))
+            plan = service.get_plan(plan_id)
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
@@ -558,6 +564,25 @@ class MoneyPlanMutations:
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             logger.error("Error archiving plan: %s", str(e), exc_info=True)
+            return PlanResult(error=Error(message=str(e)), success=False)
+
+    @strawberry.mutation
+    def remove_account(self, info: Info, input: RemoveAccountInput) -> PlanResult:
+        """Remove an account from a Money Plan."""
+        service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
+
+        try:
+            service.remove_account(
+                plan_id=UUID(input.plan_id.node_id),
+                account_id=UUID(input.account_id.node_id),
+            )
+
+            plan = service.get_plan(UUID(input.plan_id.node_id))
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+        except (MoneyPlanError, ValueError) as e:
+            logger.error(f"Error removing account: {e}", exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
 
 

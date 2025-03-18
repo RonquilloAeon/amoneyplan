@@ -295,7 +295,10 @@ class MoneyPlan(Aggregate):
             raise PlanAlreadyCommittedError("Cannot change account configuration in a committed plan")
 
         if isinstance(account_id, str):
-            account_id = UUID(account_id)
+            try:
+                account_id = UUID(account_id)
+            except ValueError as e:
+                raise ValueError(f"Invalid UUID format for account ID: {e}")
 
         # Find the account
         if account_id not in self.accounts:
@@ -385,11 +388,14 @@ class MoneyPlan(Aggregate):
         self.archived_at = datetime.utcnow()
 
     @event("AccountAdded")
-    def add_account(self, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None) -> UUID:
+    def add_account(
+        self, account_id: UUID, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None
+    ):
         """
         Add a new account to the plan.
 
         Args:
+            account_id: UUID for the account.
             name: The name of the account
             buckets: Optional list of bucket configurations, can be BucketConfig objects or dicts
 
@@ -424,8 +430,7 @@ class MoneyPlan(Aggregate):
                 account_buckets.append(bucket)
 
         # Create the account with buckets (will add default bucket if none provided)
-        account = Account.create(name=name, buckets=account_buckets)
-        account_id = account.account_id
+        account = Account.create(account_id, name, buckets=account_buckets)
 
         # Update remaining balance
         if account_buckets:
@@ -437,7 +442,37 @@ class MoneyPlan(Aggregate):
 
         # Store the ID so it's available after the event handler
         self._last_added_account_id = account_id
-        return account_id
+
+    @event("AccountRemoved")
+    def remove_account(self, account_id: Union[UUID, str]):
+        """
+        Remove an account from the plan.
+
+        Args:
+            account_id: The ID of the account to remove
+
+        Raises:
+            PlanAlreadyCommittedError: If the plan is already committed
+            AccountNotFoundError: If the account ID doesn't exist
+        """
+        self._check_not_archived()
+
+        if self.committed:
+            raise PlanAlreadyCommittedError("Cannot remove an account from a committed plan")
+
+        if isinstance(account_id, str):
+            account_id = UUID(account_id)
+
+        # Find the account
+        if account_id not in self.accounts:
+            raise AccountNotFoundError(f"Account with ID {account_id} not found")
+
+        # Return allocated funds to remaining balance
+        account_allocation = self.accounts[account_id]
+        self.remaining_balance += account_allocation.get_total_allocated()
+
+        # Remove the account
+        del self.accounts[account_id]
 
     def get_last_added_account_id(self) -> Optional[UUID]:
         """Get the ID of the last account that was added."""

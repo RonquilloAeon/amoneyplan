@@ -5,7 +5,7 @@ Application service for managing Money Plans.
 import logging
 from dataclasses import asdict
 from typing import Iterator, List, Optional, Union
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from eventsourcing.application import AggregateNotFoundError, Application, EventSourcedLog
 from eventsourcing.persistence import Transcoding
@@ -169,9 +169,26 @@ class MoneyPlanner(Application):
         """
         logger.info("Adding account %s to plan %s", name, plan_id)
         plan = self.get_plan(plan_id)
-        account_id = plan.add_account(name=name, buckets=buckets)
+        account_id = uuid4()
+        plan.add_account(account_id, name=name, buckets=buckets)
         self.save(plan)
         return account_id
+
+    def remove_account(self, plan_id: UUID, account_id: Union[UUID, str]) -> None:
+        """
+        Remove an account from a plan.
+
+        Args:
+            plan_id: The ID of the plan
+            account_id: The ID of the account to remove
+
+        Raises:
+            PlanAlreadyCommittedError: If the plan is already committed
+            AccountNotFoundError: If the account doesn't exist
+        """
+        plan = self.get_plan(plan_id)
+        plan.remove_account(account_id=account_id)
+        self.save(plan)
 
     def allocate_funds(
         self,

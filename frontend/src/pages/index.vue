@@ -95,10 +95,35 @@
             </div>
             
             <div v-else v-for="account in draftPlan.accounts" :key="account.name" class="mb-2 md:mb-4">
+              <!-- Account header with buttons -->
+              <div class="flex justify-between items-center mb-1 px-4">
+                <span class="font-medium text-sm md:text-base">Account: {{ account.name }}</span>
+                <div class="flex gap-2">
+                  <button 
+                    @click="editAccount(account)"
+                    class="btn btn-sm btn-ghost"
+                    title="Edit account"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                    </svg>
+                  </button>
+                  <button 
+                    @click="confirmRemoveAccount(account)"
+                    class="btn btn-sm btn-ghost text-error"
+                    title="Remove account"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <!-- Collapsible content -->
               <div class="collapse collapse-arrow bg-base-200">
                 <input type="checkbox" /> 
                 <div class="collapse-title font-medium py-2 md:py-3 text-sm md:text-base">
-                  Account: {{ account.name }}
+                  View Buckets
                 </div>
                 <div class="collapse-content p-0 md:p-2">
                   <div class="overflow-x-auto">
@@ -173,6 +198,19 @@
       @accountAdded="handleAccountAdded" 
     />
 
+    <EditAccountModal
+      v-if="draftPlan && accountToEdit"
+      :planId="draftPlan.id"
+      :accountId="accountToEdit.id"
+      :accountName="accountToEdit.name"
+      :originalBuckets="accountToEdit.buckets"
+      :currentAccountTotal="calculateAccountTotal(accountToEdit)"
+      :currentRemainingBalance="draftPlan.remainingBalance"
+      :isOpen="showEditAccountModal"
+      @close="closeEditModal"
+      @accountUpdated="handleAccountAdded"
+    />
+
     <!-- Toast notifications -->
     <div class="toast toast-end" v-if="toast.show">
       <div class="alert" :class="toast.type">
@@ -188,6 +226,7 @@ import { useQuery, useMutation } from '@urql/vue';
 import { RouterLink } from 'vue-router';
 import StartPlanDialog from '../components/StartPlanDialog.vue';
 import AddAccountModal from '../components/AddAccountModal.vue';
+import EditAccountModal from '../components/EditAccountModal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import PlanDate from '../components/PlanDate.vue';
 
@@ -198,6 +237,7 @@ interface Bucket {
 }
 
 interface Account {
+  id: string;  // Add this line to include account ID
   name: string;
   buckets: Bucket[];
 }
@@ -235,8 +275,37 @@ const ARCHIVE_PLAN = `
   }
 `;
 
+const REMOVE_ACCOUNT_MUTATION = `
+  mutation removeAccount($input: RemoveAccountInput!) {
+    moneyPlan {
+      removeAccount(input: $input) {
+        error {
+          message
+        }
+        success
+        moneyPlan {
+          id
+          accounts {
+            name
+            buckets {
+              bucketName
+              allocatedAmount
+              category
+            }
+          }
+          initialBalance
+          remainingBalance
+          timestamp
+        }
+      }
+    }
+  }
+`;
+
 const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
+const showEditAccountModal = ref(false);
+const accountToEdit = ref<Account | null>(null);
 const moneyPlans = ref<MoneyPlan[]>([]);
 const isCommittingPlan = ref(false);
 const isArchivingPlan = ref(false);
@@ -263,6 +332,7 @@ const GET_MONEY_PLANS = `
         node {
           id
           accounts {
+            id
             name
             buckets {
               bucketName
@@ -310,6 +380,7 @@ const { data, error, executeQuery } = useQuery({
 
 const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
 const { executeMutation: executeArchivePlan } = useMutation(ARCHIVE_PLAN);
+const { executeMutation: executeRemoveAccount } = useMutation(REMOVE_ACCOUNT_MUTATION);
 
 watchEffect(() => {
   if (data.value) {
@@ -417,6 +488,48 @@ async function archivePlan() {
     showToast('An error occurred while archiving the plan', 'alert-error');
   } finally {
     isArchivingPlan.value = false;
+  }
+}
+
+function editAccount(account: Account) {
+  accountToEdit.value = account;
+  showEditAccountModal.value = true;
+}
+
+function closeEditModal() {
+  showEditAccountModal.value = false;
+  accountToEdit.value = null;
+}
+
+async function confirmRemoveAccount(account: Account) {
+  const confirmed = window.confirm(`Are you sure you want to remove the account "${account.name}"? All buckets and allocations will be returned to the remaining balance.`);
+  if (!confirmed) return;
+  
+  try {
+    const result = await executeRemoveAccount({
+      input: {
+        planId: draftPlan.value.id,
+        accountId: account.id,
+      }
+    });
+    
+    if (result.error) {
+      showToast(result.error.message, 'alert-error');
+      return;
+    }
+    
+    if (result.data?.moneyPlan?.removeAccount?.error) {
+      showToast(result.data.moneyPlan.removeAccount.error.message, 'alert-error');
+      return;
+    }
+    
+    if (result.data?.moneyPlan?.removeAccount?.success) {
+      const updatedPlan = result.data.moneyPlan.removeAccount.moneyPlan;
+      handleAccountAdded(updatedPlan); // Reuse existing function to update the plan
+      showToast(`Account "${account.name}" removed successfully`, 'alert-success');
+    }
+  } catch (error) {
+    showToast((error as Error).message, 'alert-error');
   }
 }
 </script>

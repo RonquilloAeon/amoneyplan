@@ -4,7 +4,7 @@ Account domain models for the money management app.
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from amoneyplan.domain.money import Money
 
@@ -36,12 +36,17 @@ class Account:
     buckets: Dict[str, Bucket] = field(default_factory=dict)
 
     @classmethod
-    def create(cls, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
+    def create(cls, account_id: UUID, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
         """
         Factory method to create a new account with a generated UUID.
         If no buckets are provided or added during creation, creates a default bucket.
+
+        Args:
+            account_id: UUID for the account.
+            name: The name of the account
+            buckets: Optional list of buckets to add to the account
         """
-        account = cls(account_id=uuid4(), name=name, buckets={})
+        account = cls(account_id=account_id, name=name, buckets={})
 
         if buckets:
             # If buckets are provided, use those

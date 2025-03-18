@@ -3,7 +3,12 @@ from uuid import uuid4
 
 import pytest
 
-from amoneyplan.domain.money_plan import MoneyPlan, MoneyPlanError
+from amoneyplan.domain.money_plan import (
+    AccountNotFoundError,
+    MoneyPlan,
+    MoneyPlanError,
+    PlanAlreadyCommittedError,
+)
 
 
 @pytest.fixture
@@ -40,8 +45,12 @@ def test_account_default_bucket():
     plan.start_plan(initial_balance=1000)
 
     # Add account without specifying buckets
-    plan.add_account(name="Test Account")
+    new_account_id = uuid4()
+    plan.add_account(new_account_id, name="Test Account")
+
+    # Get the account from the plan
     account_id = plan.get_last_added_account_id()
+    assert account_id == new_account_id
 
     # Get the account from the plan
     account = plan.accounts[account_id].account
@@ -62,6 +71,7 @@ def test_account_no_default_bucket_when_buckets_provided():
 
     # Add account with buckets
     plan.add_account(
+        uuid4(),
         name="Test Account",
         buckets=[
             {"bucket_name": "Savings", "category": "savings", "allocated_amount": 500},
@@ -101,6 +111,7 @@ def test_archive_committed_plan():
 
     # Add an account with a bucket to make the plan committable
     plan.add_account(
+        uuid4(),
         name="Test Account",
         buckets=[{"bucket_name": "Savings", "category": "savings", "allocated_amount": 1000}],
     )
@@ -135,7 +146,69 @@ def test_cannot_modify_archived_plan(money_plan):
 
     # Attempts to modify should raise errors
     with pytest.raises(MoneyPlanError, match="Cannot modify an archived plan"):
-        money_plan.add_account(name="New Account")
+        money_plan.add_account(uuid4(), name="New Account")
 
     with pytest.raises(MoneyPlanError, match="Cannot modify an archived plan"):
         money_plan.adjust_plan_balance(adjustment=100)
+
+
+def test_remove_account():
+    """Test removing an account from a draft plan."""
+    plan = MoneyPlan()
+    plan.start_plan(initial_balance=1000)
+
+    # Add account with some funds allocated
+    plan.add_account(
+        uuid4(),
+        name="Test Account",
+        buckets=[
+            {"bucket_name": "Savings", "category": "savings", "allocated_amount": 500},
+            {"bucket_name": "Bills", "category": "expenses", "allocated_amount": 300},
+        ],
+    )
+    account_id = plan.get_last_added_account_id()
+
+    # Verify initial state
+    assert len(plan.accounts) == 1
+    assert plan.remaining_balance.as_float == 200  # 1000 - 500 - 300
+    assert account_id in plan.accounts
+
+    # Remove the account
+    plan.remove_account(account_id)
+
+    # Verify account was removed and funds were returned
+    assert len(plan.accounts) == 0
+    assert account_id not in plan.accounts
+    assert plan.remaining_balance.as_float == 1000  # All funds returned
+
+
+def test_cannot_remove_account_from_committed_plan():
+    """Test that we cannot remove accounts from committed plans."""
+    plan = MoneyPlan()
+    plan.start_plan(initial_balance=1000)
+
+    # Add account with all funds allocated
+    plan.add_account(
+        uuid4(),
+        name="Test Account",
+        buckets=[{"bucket_name": "Savings", "category": "savings", "allocated_amount": 1000}],
+    )
+    account_id = plan.get_last_added_account_id()
+
+    # Commit the plan
+    plan.commit_plan()
+
+    # Try to remove the account - should raise error
+    with pytest.raises(PlanAlreadyCommittedError, match="Cannot remove an account from a committed plan"):
+        plan.remove_account(account_id)
+
+
+def test_cannot_remove_nonexistent_account():
+    """Test that removing a non-existent account raises an error."""
+    plan = MoneyPlan()
+    plan.start_plan(initial_balance=1000)
+
+    # Try to remove an account with a random UUID
+    nonexistent_id = uuid4()
+    with pytest.raises(AccountNotFoundError, match=f"Account with ID {nonexistent_id} not found"):
+        plan.remove_account(nonexistent_id)

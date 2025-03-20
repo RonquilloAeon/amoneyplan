@@ -219,13 +219,6 @@ class RemoveAccountInput:
 
 
 @strawberry.input
-class ToggleAccountCheckInput:
-    plan_id: relay.GlobalID
-    account_id: relay.GlobalID
-    is_checked: bool
-
-
-@strawberry.input
 class SetAccountCheckedStateInput:
     plan_id: relay.GlobalID
     account_id: relay.GlobalID

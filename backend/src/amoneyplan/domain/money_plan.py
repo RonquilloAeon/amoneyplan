@@ -467,7 +467,7 @@ class MoneyPlan(Aggregate):
         account = self.accounts[account_id].account
 
         if account.is_checked != is_checked:
-            account.toggle_checked(is_checked)
+            account.set_checked_state(is_checked)
         else:
             raise AccountStateMatchError(
                 "Account is already checked" if is_checked else "Account is already unchecked"

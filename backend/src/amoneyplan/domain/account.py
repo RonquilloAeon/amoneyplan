@@ -87,8 +87,8 @@ class Account:
             total += bucket.allocated_amount
         return total
 
-    def toggle_checked(self, is_checked: bool) -> None:
-        """Toggle the checked state of the account."""
+    def set_checked_state(self, is_checked: bool) -> None:
+        """Change the checked state of the account."""
         self.is_checked = is_checked
 
     def __str__(self) -> str:

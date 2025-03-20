@@ -52,6 +52,7 @@ class Account(relay.Node):
     id: relay.NodeID[UUID]
     name: str
     buckets: List[Bucket]
+    is_checked: bool
 
     @classmethod
     def resolve_node(cls, node_id: str, info: Info) -> Optional["Account"]:
@@ -65,6 +66,7 @@ class Account(relay.Node):
             id=domain_account.account_id,
             name=domain_account.name,
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
+            is_checked=domain_account.is_checked,
         )
         return account
 
@@ -214,6 +216,13 @@ class ArchivePlanInput:
 class RemoveAccountInput:
     plan_id: relay.GlobalID
     account_id: relay.GlobalID
+
+
+@strawberry.input
+class SetAccountCheckedStateInput:
+    plan_id: relay.GlobalID
+    account_id: relay.GlobalID
+    is_checked: bool
 
 
 @strawberry.input
@@ -583,6 +592,26 @@ class MoneyPlanMutations:
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error removing account: {e}", exc_info=True)
+            return PlanResult(error=Error(message=str(e)), success=False)
+
+    @strawberry.mutation
+    def set_account_checked_state(self, info: Info, input: SetAccountCheckedStateInput) -> PlanResult:
+        """Set the checked state of an account."""
+        service = apps.get_app_config("money_plans").money_planner
+        # Set user ID from request context
+        service.user_id = str(info.context.request.user.id)
+
+        try:
+            service.set_account_checked_state(
+                plan_id=UUID(input.plan_id.node_id),
+                account_id=UUID(input.account_id.node_id),
+                is_checked=input.is_checked,
+            )
+
+            plan = service.get_plan(UUID(input.plan_id.node_id))
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+        except (MoneyPlanError, ValueError) as e:
+            logger.error(f"Error setting account checked state: {e}", exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
 
 

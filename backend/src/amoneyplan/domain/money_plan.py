@@ -43,6 +43,12 @@ class AccountNotFoundError(MoneyPlanError):
     pass
 
 
+class AccountStateMatchError(MoneyPlanError):
+    """Raised when the account state already matches the desired state."""
+
+    pass
+
+
 class InvalidPlanStateError(MoneyPlanError):
     """Raised when the plan is in an invalid state for commitment."""
 
@@ -442,6 +448,30 @@ class MoneyPlan(Aggregate):
 
         # Store the ID so it's available after the event handler
         self._last_added_account_id = account_id
+
+    @event("AccountCheckedStateSet")
+    def set_account_checked_state(self, account_id: Union[UUID, str], is_checked: bool) -> None:
+        """
+        Set the checked state of an account.
+
+        Args:
+            account_id: The ID of the account
+            is_checked: The desired checked state
+
+        Raises:
+            AccountNotFoundError: If the account doesn't exist
+        """
+        if account_id not in self.accounts:
+            raise AccountNotFoundError(f"Account with ID {account_id} not found")
+
+        account = self.accounts[account_id].account
+
+        if account.is_checked != is_checked:
+            account.set_checked_state(is_checked)
+        else:
+            raise AccountStateMatchError(
+                "Account is already checked" if is_checked else "Account is already unchecked"
+            )
 
     @event("AccountRemoved")
     def remove_account(self, account_id: Union[UUID, str]):

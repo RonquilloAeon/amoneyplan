@@ -34,6 +34,7 @@ class Account:
     account_id: UUID
     name: str
     buckets: Dict[str, Bucket] = field(default_factory=dict)
+    is_checked: bool = field(default=False)
 
     @classmethod
     def create(cls, account_id: UUID, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
@@ -85,6 +86,10 @@ class Account:
         for bucket in self.buckets.values():
             total += bucket.allocated_amount
         return total
+
+    def toggle_checked(self, is_checked: bool) -> None:
+        """Toggle the checked state of the account."""
+        self.is_checked = is_checked
 
     def __str__(self) -> str:
         return f"{self.name} ({len(self.buckets)} buckets)"

@@ -5,6 +5,7 @@ import pytest
 
 from amoneyplan.domain.money_plan import (
     AccountNotFoundError,
+    AccountStateMatchError,
     MoneyPlan,
     MoneyPlanError,
     PlanAlreadyCommittedError,
@@ -212,3 +213,40 @@ def test_cannot_remove_nonexistent_account():
     nonexistent_id = uuid4()
     with pytest.raises(AccountNotFoundError, match=f"Account with ID {nonexistent_id} not found"):
         plan.remove_account(nonexistent_id)
+
+
+def test_set_account_checked_state():
+    """Test setting the checked state of an account."""
+    plan = MoneyPlan()
+    plan.start_plan(initial_balance=1000)
+
+    # Add account
+    plan.add_account(uuid4(), name="Test Account")
+    account_id = plan.get_last_added_account_id()
+
+    # Verify initial state
+    assert not plan.accounts[account_id].account.is_checked
+
+    # Set checked state
+    plan.set_account_checked_state(account_id, is_checked=True)
+    assert plan.accounts[account_id].account.is_checked
+
+    # Repeat previous state setting to ensure we do not generated a duplicate event
+    with pytest.raises(AccountStateMatchError, match="Account is already checked"):
+        plan.set_account_checked_state(account_id, is_checked=True)
+        assert plan.accounts[account_id].account.is_checked
+
+    # Unset checked state again
+    plan.set_account_checked_state(account_id, is_checked=False)
+    assert not plan.accounts[account_id].account.is_checked
+
+    # Repeat previous state setting to ensure we do not generated a duplicate event
+    with pytest.raises(AccountStateMatchError, match="Account is already unchecked"):
+        plan.set_account_checked_state(account_id, is_checked=False)
+        assert not plan.accounts[account_id].account.is_checked
+
+    # Filter events of type AccountCheckedStateSet and verify count
+    checked_state_events = [
+        e for e in plan.pending_events if e.__class__.__name__ == "AccountCheckedStateSet"
+    ]
+    assert len(checked_state_events) == 2

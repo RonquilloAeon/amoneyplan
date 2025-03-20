@@ -286,6 +286,25 @@ class MoneyPlanner(Application):
         plan.change_account_configuration(account_id=account_id, new_bucket_config=new_bucket_config)
         self.save(plan)
 
+    def set_account_checked_state(
+        self, plan_id: UUID, account_id: Union[UUID, str], is_checked: bool
+    ) -> None:
+        """
+        Set the checked state of an account.
+
+        Args:
+            plan_id: The ID of the plan
+            account_id: The ID of the account
+            is_checked: The desired checked state
+
+        Raises:
+            PlanAlreadyCommittedError: If the plan is already committed
+            AccountNotFoundError: If the account doesn't exist
+        """
+        plan = self.get_plan(plan_id)
+        plan.set_account_checked_state(account_id=account_id, is_checked=is_checked)
+        self.save(plan)
+
     def commit_plan(self, plan_id: UUID) -> None:
         """
         Commit a Money Plan, finalizing its allocations.

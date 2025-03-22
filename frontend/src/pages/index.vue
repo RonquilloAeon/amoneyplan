@@ -64,12 +64,22 @@
                 </div>
               </div>
             </div>
-
-            <!-- Display notes if they exist -->
-            <div v-if="draftPlan.notes" class="mb-4 text-sm md:text-base text-base-content/80">
-              {{ draftPlan.notes }}
+            
+            <!-- Notes section with edit button -->
+            <div class="flex justify-between items-start mb-4">
+              <div class="flex-grow text-sm md:text-base text-base-content/80">
+                <p v-if="draftPlan.notes">{{ draftPlan.notes }}</p>
+                <p v-else class="text-base-content/50 italic">No notes for this plan</p>
+              </div>
+              <button 
+                @click="showEditPlanNotes = true" 
+                class="btn btn-ghost btn-sm btn-square"
+                title="Edit plan notes"
+              >
+                <i class="fa-solid fa-file-lines text-secondary"></i>
+              </button>
             </div>
-
+            
             <!-- Add Account button -->
             <div v-if="draftPlan.remainingBalance > 0" class="flex justify-end mb-4">
               <button @click="showAddAccountModal = true" class="btn btn-sm btn-outline">
@@ -94,63 +104,20 @@
               </button>
             </div>
             
-            <div v-else v-for="account in draftPlan.accounts" :key="account.name" class="mb-2 md:mb-4">
-              <!-- Account header with buttons -->
-              <div class="flex justify-between items-center mb-1 px-4">
-                <span class="font-medium text-sm md:text-base">Account: {{ account.name }}</span>
-                <div class="flex gap-2">
-                  <button 
-                    @click="editAccount(account)"
-                    class="btn btn-sm btn-ghost"
-                    title="Edit account"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                    </svg>
-                  </button>
-                  <button 
-                    @click="confirmRemoveAccount(account)"
-                    class="btn btn-sm btn-ghost text-error"
-                    title="Remove account"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <!-- Collapsible content -->
-              <div class="collapse collapse-arrow bg-base-200">
-                <input type="checkbox" /> 
-                <div class="collapse-title font-medium py-2 md:py-3 text-sm md:text-base">
-                  View Buckets
-                </div>
-                <div class="collapse-content p-0 md:p-2">
-                  <div class="overflow-x-auto">
-                    <table class="table table-zebra text-xs md:text-sm w-full">
-                      <thead>
-                        <tr>
-                          <th>Bucket Name</th>
-                          <th>Category</th>
-                          <th>Allocated Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="bucket in account.buckets" :key="bucket.bucketName">
-                          <td>{{ bucket.bucketName }}</td>
-                          <td>{{ bucket.category || 'N/A' }}</td>
-                          <td>${{ bucket.allocatedAmount }}</td>
-                        </tr>
-                        <!-- Account total row -->
-                        <tr class="font-semibold border-t">
-                          <td colspan="2" class="text-right">Account Total:</td>
-                          <td>${{ calculateAccountTotal(account) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+            <!-- Accounts list using the new AccountCard component -->
+            <div v-else>
+              <AccountCard
+                v-for="account in draftPlan.accounts" 
+                :key="account.id"
+                :account="account"
+                :plan-initial-balance="draftPlan.initialBalance"
+                :is-archived="draftPlan.isArchived"
+                :is-committed="draftPlan.isCommitted"
+                @toggle-check="toggleAccountCheck"
+                @edit-notes="editAccountNotes"
+                @edit-account="editAccount"
+                @remove-account="confirmRemoveAccount"
+              />
             </div>
             
             <!-- Commit Plan section at the bottom of draft plan -->
@@ -197,7 +164,8 @@
       @close="showAddAccountModal = false" 
       @accountAdded="handleAccountAdded" 
     />
-
+    
+    <!-- Edit Account Modal -->
     <EditAccountModal
       v-if="draftPlan && accountToEdit"
       :planId="draftPlan.id"
@@ -210,7 +178,27 @@
       @close="closeEditModal"
       @accountUpdated="handleAccountAdded"
     />
-
+    
+    <!-- Edit Plan Notes Modal -->
+    <EditPlanNotesModal
+      v-if="showEditPlanNotes && draftPlan"
+      :plan-id="draftPlan.id"
+      :initial-notes="draftPlan.notes"
+      @close="showEditPlanNotes = false"
+      @notes-saved="handlePlanNotesUpdated"
+    />
+    
+    <!-- Edit Account Notes Modal -->
+    <EditAccountNotesModal
+      v-if="accountForNotes && draftPlan"
+      :plan-id="draftPlan.id"
+      :account-id="accountForNotes.id"
+      :account-name="accountForNotes.name"
+      :initial-notes="accountForNotes.notes"
+      @close="accountForNotes = null"
+      @notes-saved="handleAccountNotesUpdated"
+    />
+    
     <!-- Toast notifications -->
     <div class="toast toast-end" v-if="toast.show">
       <div class="alert" :class="toast.type">
@@ -227,8 +215,11 @@ import { RouterLink } from 'vue-router';
 import StartPlanDialog from '../components/StartPlanDialog.vue';
 import AddAccountModal from '../components/AddAccountModal.vue';
 import EditAccountModal from '../components/EditAccountModal.vue';
+import EditPlanNotesModal from '../components/EditPlanNotesModal.vue';
+import EditAccountNotesModal from '../components/EditAccountNotesModal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import PlanDate from '../components/PlanDate.vue';
+import AccountCard from '../components/AccountCard.vue';
 
 interface Bucket {
   bucketName: string;
@@ -237,9 +228,11 @@ interface Bucket {
 }
 
 interface Account {
-  id: string;  // Add this line to include account ID
+  id: string;
   name: string;
   buckets: Bucket[];
+  notes: string;
+  isChecked: boolean;
 }
 
 interface MoneyPlan {
@@ -286,7 +279,10 @@ const REMOVE_ACCOUNT_MUTATION = `
         moneyPlan {
           id
           accounts {
+            id
             name
+            notes
+            isChecked
             buckets {
               bucketName
               allocatedAmount
@@ -296,6 +292,38 @@ const REMOVE_ACCOUNT_MUTATION = `
           initialBalance
           remainingBalance
           timestamp
+          notes
+        }
+      }
+    }
+  }
+`;
+
+const SET_ACCOUNT_CHECKED_MUTATION = `
+  mutation setAccountCheckedState($input: SetAccountCheckedStateInput!) {
+    moneyPlan {
+      setAccountCheckedState(input: $input) {
+        success
+        error {
+          message
+        }
+        moneyPlan {
+          id
+          accounts {
+            id
+            name
+            isChecked
+            notes
+            buckets {
+              bucketName
+              allocatedAmount
+              category
+            }
+          }
+          initialBalance
+          remainingBalance
+          timestamp
+          notes
         }
       }
     }
@@ -305,7 +333,9 @@ const REMOVE_ACCOUNT_MUTATION = `
 const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
 const showEditAccountModal = ref(false);
+const showEditPlanNotes = ref(false);
 const accountToEdit = ref<Account | null>(null);
+const accountForNotes = ref<Account | null>(null);
 const moneyPlans = ref<MoneyPlan[]>([]);
 const isCommittingPlan = ref(false);
 const isArchivingPlan = ref(false);
@@ -334,6 +364,8 @@ const GET_MONEY_PLANS = `
           accounts {
             id
             name
+            notes
+            isChecked
             buckets {
               bucketName
               allocatedAmount
@@ -381,6 +413,7 @@ const { data, error, executeQuery } = useQuery({
 const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
 const { executeMutation: executeArchivePlan } = useMutation(ARCHIVE_PLAN);
 const { executeMutation: executeRemoveAccount } = useMutation(REMOVE_ACCOUNT_MUTATION);
+const { executeMutation: executeAccountCheckMutation } = useMutation(SET_ACCOUNT_CHECKED_MUTATION);
 
 watchEffect(() => {
   if (data.value) {
@@ -409,6 +442,7 @@ function handleAccountAdded(updatedPlan: MoneyPlan) {
   if (index !== -1) {
     moneyPlans.value[index] = updatedPlan;
   }
+  showToast('Account updated successfully', 'alert-success');
 }
 
 // Calculate the total amount allocated for an account
@@ -472,7 +506,6 @@ async function archivePlan() {
         planId: draftPlan.value.id
       }
     });
-
     if (result.data?.moneyPlan?.archivePlan?.success) {
       showToast('Plan archived successfully', 'alert-success');
       // Clear the plans list since archived plan is no longer a draft
@@ -531,6 +564,72 @@ async function confirmRemoveAccount(account: Account) {
   } catch (error) {
     showToast((error as Error).message, 'alert-error');
   }
+}
+
+function editAccountNotes(account: Account) {
+  accountForNotes.value = account;
+}
+
+async function toggleAccountCheck(account: Account) {
+  try {
+    const result = await executeAccountCheckMutation({
+      input: {
+        planId: draftPlan.value.id,
+        accountId: account.id,
+        isChecked: !account.isChecked
+      }
+    });
+
+    if (result.error) {
+      console.error('Error toggling account check state:', result.error);
+      showToast('Failed to update account status', 'alert-error');
+      return;
+    }
+    
+    if (result.data?.moneyPlan?.setAccountCheckedState?.success) {
+      const updatedPlan = result.data.moneyPlan.setAccountCheckedState.moneyPlan;
+      handleAccountAdded(updatedPlan);
+      
+      // Show a toast based on the new state
+      const message = account.isChecked ? 
+        `Unchecked account: ${account.name}` : 
+        `Checked account: ${account.name}`;
+      showToast(message, 'alert-success');
+    } else {
+      const errorMessage = result.data?.moneyPlan?.setAccountCheckedState?.error?.message || 
+        'Failed to update account status';
+      showToast(errorMessage, 'alert-error');
+    }
+  } catch (e) {
+    console.error('Error toggling account check state:', e);
+    showToast('An error occurred while updating the account', 'alert-error');
+  }
+}
+
+function handlePlanNotesUpdated(updatedPlan: MoneyPlan) {
+  // Find and update the plan in our list
+  const index = moneyPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+  if (index !== -1) {
+    moneyPlans.value[index] = {
+      ...moneyPlans.value[index],
+      notes: updatedPlan.notes
+    };
+  }
+  showToast('Plan notes updated successfully', 'alert-success');
+}
+
+function handleAccountNotesUpdated(updatedPlan: MoneyPlan) {
+  // Find and update the plan in our list
+  const index = moneyPlans.value.findIndex(plan => plan.id === updatedPlan.id);
+  if (index !== -1) {
+    // Preserve the timestamp and merge the updated plan data
+    const existingTimestamp = moneyPlans.value[index].timestamp;
+    moneyPlans.value[index] = {
+      ...updatedPlan,
+      timestamp: existingTimestamp || updatedPlan.timestamp
+    };
+  }
+  showToast('Account notes updated successfully', 'alert-success');
 }
 </script>
 

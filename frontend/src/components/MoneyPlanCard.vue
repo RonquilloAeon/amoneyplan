@@ -38,40 +38,58 @@
         </div>
       </div>
 
-      <!-- Display notes if they exist -->
-      <div v-if="plan.notes" class="mb-4 text-sm md:text-base text-base-content/80">
-        {{ plan.notes }}
+      <!-- Notes section with edit button -->
+      <div class="flex justify-between items-start mb-4">
+        <div class="flex-grow text-sm md:text-base text-base-content/80">
+          <p v-if="plan.notes">{{ plan.notes }}</p>
+          <p v-else class="text-base-content/50 italic">No notes for this plan</p>
+        </div>
+        <button 
+          v-if="!plan.isArchived" 
+          @click="showEditPlanNotes = true" 
+          class="btn btn-ghost btn-sm btn-square"
+          title="Edit plan notes"
+        >
+          <i class="fa-solid fa-file-lines text-secondary"></i>
+        </button>
       </div>
       
       <div class="divider my-1 md:my-2">Accounts</div>
       
-      <div v-for="account in plan.accounts" :key="account.name" class="mb-2 md:mb-4">
-        <div class="collapse collapse-arrow bg-base-200">
-          <input type="checkbox" /> 
-          <div class="collapse-title font-medium py-2 md:py-3 text-sm md:text-base">
-            Account: {{ account.name }}
-          </div>
-          <div class="collapse-content p-0 md:p-2">
-            <div class="overflow-x-auto">
-              <table class="table table-zebra text-xs md:text-sm w-full">
-                <thead>
-                  <tr>
-                    <th>Bucket Name</th>
-                    <th>Allocated Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="bucket in account.buckets" :key="bucket.bucketName">
-                    <td>{{ bucket.bucketName }}</td>
-                    <td>${{ bucket.allocatedAmount }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Using the new AccountCard component for each account -->
+      <AccountCard
+        v-for="account in plan.accounts"
+        :key="account.id"
+        :account="account"
+        :plan-initial-balance="plan.initialBalance"
+        :is-archived="plan.isArchived"
+        :is-committed="plan.isCommitted"
+        @toggle-check="toggleAccountCheck"
+        @edit-notes="editAccountNotes"
+        @edit-account="$emit('edit-account', account)"
+        @remove-account="$emit('remove-account', account)"
+      />
     </div>
+    
+    <!-- Edit Plan Notes Modal -->
+    <EditPlanNotesModal
+      v-if="showEditPlanNotes"
+      :plan-id="plan.id"
+      :initial-notes="plan.notes"
+      @close="showEditPlanNotes = false"
+      @notes-saved="handlePlanNotesUpdated"
+    />
+    
+    <!-- Edit Account Notes Modal -->
+    <EditAccountNotesModal
+      v-if="selectedAccount"
+      :plan-id="plan.id"
+      :account-id="selectedAccount.id"
+      :account-name="selectedAccount.name"
+      :initial-notes="selectedAccount.notes"
+      @close="selectedAccount = null"
+      @notes-saved="handleAccountNotesUpdated"
+    />
   </div>
 </template>
 
@@ -79,15 +97,22 @@
 import { ref } from 'vue';
 import { useMutation } from '@urql/vue';
 import PlanDate from './PlanDate.vue';
+import EditPlanNotesModal from './EditPlanNotesModal.vue';
+import EditAccountNotesModal from './EditAccountNotesModal.vue';
+import AccountCard from './AccountCard.vue';
 
 interface Bucket {
   bucketName: string;
   allocatedAmount: number;
+  category?: string;
 }
 
 interface Account {
+  id: string;
   name: string;
   buckets: Bucket[];
+  isChecked: boolean;
+  notes: string;
 }
 
 interface MoneyPlan {
@@ -105,9 +130,16 @@ const props = defineProps<{
   plan: MoneyPlan
 }>();
 
-const emit = defineEmits(['planArchived']);
+const emit = defineEmits([
+  'planArchived', 
+  'planUpdated', 
+  'edit-account', 
+  'remove-account'
+]);
 
 const isArchiving = ref(false);
+const showEditPlanNotes = ref(false);
+const selectedAccount = ref<Account | null>(null);
 
 const ARCHIVE_PLAN_MUTATION = `
   mutation archivePlan($input: ArchivePlanInput!) {
@@ -126,7 +158,29 @@ const ARCHIVE_PLAN_MUTATION = `
   }
 `;
 
+const SET_ACCOUNT_CHECKED_MUTATION = `
+  mutation setAccountCheckedState($input: SetAccountCheckedStateInput!) {
+    moneyPlan {
+      setAccountCheckedState(input: $input) {
+        success
+        error {
+          message
+        }
+        moneyPlan {
+          id
+          accounts {
+            id
+            name
+            isChecked
+          }
+        }
+      }
+    }
+  }
+`;
+
 const { executeMutation } = useMutation(ARCHIVE_PLAN_MUTATION);
+const { executeMutation: executeAccountCheckMutation } = useMutation(SET_ACCOUNT_CHECKED_MUTATION);
 
 function getBadgeClass() {
   if (props.plan.isArchived) return 'badge-ghost';
@@ -148,12 +202,10 @@ async function archivePlan() {
         planId: props.plan.id
       }
     });
-
     if (result.error) {
       console.error('Error archiving plan:', result.error);
       return;
     }
-
     if (result.data?.moneyPlan?.archivePlan?.success) {
       emit('planArchived', result.data.moneyPlan.archivePlan.moneyPlan);
     } else {
@@ -171,5 +223,42 @@ function getArchiveTooltip() {
     return "Archive this committed plan to hide it from the default view";
   }
   return "Archive this draft plan if you no longer need it";
+}
+
+function editAccountNotes(account: Account) {
+  selectedAccount.value = account;
+}
+
+async function toggleAccountCheck(account: Account) {
+  try {
+    const result = await executeAccountCheckMutation({
+      input: {
+        planId: props.plan.id,
+        accountId: account.id,
+        isChecked: !account.isChecked
+      }
+    });
+
+    if (result.error) {
+      console.error('Error toggling account check state:', result.error);
+      return;
+    }
+    if (result.data?.moneyPlan?.setAccountCheckedState?.success) {
+      emit('planUpdated', result.data.moneyPlan.setAccountCheckedState.moneyPlan);
+    } else {
+      console.error('Failed to toggle account check state:', 
+        result.data?.moneyPlan?.setAccountCheckedState?.error?.message);
+    }
+  } catch (e) {
+    console.error('Error toggling account check state:', e);
+  }
+}
+
+function handlePlanNotesUpdated(updatedPlan: MoneyPlan) {
+  emit('planUpdated', updatedPlan);
+}
+
+function handleAccountNotesUpdated(updatedPlan: MoneyPlan) {
+  emit('planUpdated', updatedPlan);
 }
 </script>

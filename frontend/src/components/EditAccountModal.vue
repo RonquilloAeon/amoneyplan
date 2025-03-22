@@ -10,6 +10,18 @@
           <div class="text-lg">${{ remainingBalance.toFixed(2) }}</div>
         </div>
       </div>
+
+      <div class="form-control w-full mb-4">
+        <label class="cursor-pointer label justify-start gap-4">
+          <input 
+            type="checkbox" 
+            :checked="isChecked"
+            @change="toggleAccountCheck" 
+            class="checkbox checkbox-primary" 
+          />
+          <span class="label-text">Mark account as checked off</span>
+        </label>
+      </div>
       
       <form @submit.prevent="updateAccount">
         <div class="divider">Buckets</div>
@@ -166,6 +178,7 @@ const props = defineProps<{
   originalBuckets: Bucket[];
   currentAccountTotal: number;
   currentRemainingBalance: number;
+  isChecked: boolean;
   isOpen: boolean;
 }>();
 
@@ -308,6 +321,62 @@ async function updateAccount() {
     errorMessage.value = (error as Error).message;
   } finally {
     isSaving.value = false;
+  }
+}
+
+// Toggle account check mutation
+const SET_ACCOUNT_CHECKED_STATE_MUTATION = gql`
+  mutation setAccountCheckedState($input: SetAccountCheckedStateInput!) {
+    moneyPlan {
+      setAccountCheckedState(input: $input) {
+        success
+        error {
+          message
+        }
+        moneyPlan {
+          id
+          accounts {
+            id
+            name
+            isChecked
+            buckets {
+              bucketName
+              category
+              allocatedAmount
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const { executeMutation: executeSetCheckedState } = useMutation(SET_ACCOUNT_CHECKED_STATE_MUTATION);
+
+async function toggleAccountCheck() {
+  try {
+    const response = await executeSetCheckedState({
+      input: {
+        planId: props.planId,
+        accountId: props.accountId,
+        isChecked: !props.isChecked
+      }
+    });
+
+    if (response.error) {
+      errorMessage.value = response.error.message;
+      return;
+    }
+
+    if (response.data.moneyPlan.setAccountCheckedState.error) {
+      errorMessage.value = response.data.moneyPlan.setAccountCheckedState.error.message;
+      return;
+    }
+
+    // Success! Emit update event
+    emit('accountUpdated', response.data.moneyPlan.setAccountCheckedState.moneyPlan);
+  } catch (error) {
+    errorMessage.value = (error as Error).message;
   }
 }
 

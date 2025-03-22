@@ -53,6 +53,7 @@ class Account(relay.Node):
     name: str
     buckets: List[Bucket]
     is_checked: bool
+    notes: str = ""
 
     @classmethod
     def resolve_node(cls, node_id: str, info: Info) -> Optional["Account"]:
@@ -67,6 +68,7 @@ class Account(relay.Node):
             name=domain_account.name,
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
             is_checked=domain_account.is_checked,
+            notes=domain_account.notes,
         )
         return account
 
@@ -231,6 +233,19 @@ class MoneyPlanFilter:
 
     is_archived: bool = False
     status: Optional[str] = None  # 'all', 'draft', or 'committed'
+
+
+@strawberry.input
+class EditPlanNotesInput:
+    plan_id: relay.GlobalID
+    notes: str
+
+
+@strawberry.input
+class EditAccountNotesInput:
+    plan_id: relay.GlobalID
+    account_id: relay.GlobalID
+    notes: str
 
 
 # GraphQL queries
@@ -612,6 +627,40 @@ class MoneyPlanMutations:
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error setting account checked state: {e}", exc_info=True)
+            return PlanResult(error=Error(message=str(e)), success=False)
+
+    @strawberry.mutation
+    def edit_plan_notes(self, info: Info, input: EditPlanNotesInput) -> PlanResult:
+        """
+        Edit the notes of a plan.
+        """
+        service = apps.get_app_config("money_plans").money_planner
+        service.user_id = str(info.context.request.user.id)
+
+        try:
+            service.edit_plan_notes(plan_id=UUID(input.plan_id.node_id), notes=input.notes)
+            plan = service.get_plan(UUID(input.plan_id.node_id))
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+        except (MoneyPlanError, ValueError) as e:
+            return PlanResult(error=Error(message=str(e)), success=False)
+
+    @strawberry.mutation
+    def edit_account_notes(self, info: Info, input: EditAccountNotesInput) -> PlanResult:
+        """
+        Edit the notes of an account.
+        """
+        service = apps.get_app_config("money_plans").money_planner
+        service.user_id = str(info.context.request.user.id)
+
+        try:
+            service.edit_account_notes(
+                plan_id=UUID(input.plan_id.node_id),
+                account_id=UUID(input.account_id.node_id),
+                notes=input.notes,
+            )
+            plan = service.get_plan(UUID(input.plan_id.node_id))
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+        except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 
 

@@ -45,6 +45,9 @@
           :key="plan.id" 
           :plan="plan" 
           @plan-archived="handlePlanArchived"
+          @plan-updated="handlePlanUpdated"
+          @edit-account="handleEditAccount"
+          @remove-account="handleRemoveAccount"
         />
       </div>
     </div>
@@ -73,7 +76,10 @@ interface Bucket {
 }
 
 interface Account {
+  id: string;
   name: string;
+  notes: string;
+  isChecked: boolean;
   buckets: Bucket[];
 }
 
@@ -123,10 +129,14 @@ const GET_MONEY_PLANS = `
           timestamp
           notes
           accounts {
+            id
             name
+            notes
+            isChecked
             buckets {
               bucketName
               allocatedAmount
+              category
             }
           }
           isCommitted
@@ -180,6 +190,27 @@ function handlePlanArchived(_updatedPlan: MoneyPlan) {
   
   // Refresh the plans list
   executeQuery({ filter: currentFilter.value });
+}
+
+function handlePlanUpdated(_updatedPlan: MoneyPlan) {
+  // Show success message
+  showToast('Plan updated successfully', 'alert-success');
+  
+  // Refresh the plans list to get the latest data
+  executeQuery({ 
+    filter: currentFilter.value,
+    requestPolicy: 'network-only' // Force fresh data from server
+  });
+}
+
+function handleEditAccount(account: Account) {
+  // In the plans view, we can't edit accounts, but we can handle the event
+  showToast(`Cannot edit account "${account.name}" in this view`, 'alert-info');
+}
+
+function handleRemoveAccount(account: Account) {
+  // In the plans view, we can't remove accounts, but we can handle the event
+  showToast(`Cannot remove account "${account.name}" in this view`, 'alert-info');
 }
 
 function showToast(message: string, type: string = 'alert-info', duration: number = 3000) {

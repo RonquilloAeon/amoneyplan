@@ -35,6 +35,7 @@ class Account:
     name: str
     buckets: Dict[str, Bucket] = field(default_factory=dict)
     is_checked: bool = field(default=False)
+    notes: str = ""
 
     @classmethod
     def create(cls, account_id: UUID, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
@@ -90,6 +91,15 @@ class Account:
     def set_checked_state(self, is_checked: bool) -> None:
         """Change the checked state of the account."""
         self.is_checked = is_checked
+
+    def edit_notes(self, notes: str):
+        """
+        Edit the notes of the account.
+
+        Args:
+            notes: The new notes for the account
+        """
+        self.notes = notes
 
     def __str__(self) -> str:
         return f"{self.name} ({len(self.buckets)} buckets)"

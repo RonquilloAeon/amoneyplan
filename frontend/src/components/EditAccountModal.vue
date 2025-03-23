@@ -166,6 +166,7 @@ const props = defineProps<{
   originalBuckets: Bucket[];
   currentAccountTotal: number;
   currentRemainingBalance: number;
+  isChecked: boolean;
   isOpen: boolean;
 }>();
 
@@ -308,6 +309,71 @@ async function updateAccount() {
     errorMessage.value = (error as Error).message;
   } finally {
     isSaving.value = false;
+  }
+}
+
+// Toggle account check mutation
+const SET_ACCOUNT_CHECKED_STATE_MUTATION = gql`
+  mutation setAccountCheckedState($input: SetAccountCheckedStateInput!) {
+    moneyPlan {
+      setAccountCheckedState(input: $input) {
+        success
+        error {
+          message
+        }
+        moneyPlan {
+          id
+          accounts {
+            id
+            name
+            isChecked
+            notes
+            buckets {
+              bucketName
+              category
+              allocatedAmount
+            }
+          }
+          initialBalance
+          remainingBalance
+          timestamp
+          isCommitted
+          isArchived
+        }
+      }
+    }
+  }
+`;
+
+const { executeMutation: executeSetCheckedState } = useMutation(SET_ACCOUNT_CHECKED_STATE_MUTATION);
+
+async function toggleAccountCheck() {
+  try {
+    const response = await executeSetCheckedState({
+      input: {
+        planId: props.planId,
+        accountId: props.accountId,
+        isChecked: !props.isChecked
+      }
+    });
+
+    if (response.error) {
+      errorMessage.value = response.error.message;
+      return;
+    }
+
+    if (response.data.moneyPlan.setAccountCheckedState.error) {
+      errorMessage.value = response.data.moneyPlan.setAccountCheckedState.error.message;
+      return;
+    }
+
+    // Success! Emit update event
+    emit('accountUpdated', response.data.moneyPlan.setAccountCheckedState.moneyPlan);
+    
+    // Close the modal after successful toggle
+    emit('close');
+  } catch (error) {
+    errorMessage.value = (error as Error).message;
   }
 }
 

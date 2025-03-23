@@ -369,3 +369,28 @@ class MoneyPlanner(Application):
         plan = self.get_plan(plan_id)
         plan.archive_plan()
         self.save(plan)
+
+    def edit_plan_notes(self, plan_id: UUID, notes: str) -> None:
+        """
+        Edit the notes of a plan.
+
+        Args:
+            plan_id: The ID of the plan
+            notes: The new notes for the plan
+        """
+        plan = self.get_plan(plan_id)
+        plan.edit_plan_notes(notes)
+        self.save(plan)
+
+    def edit_account_notes(self, plan_id: UUID, account_id: UUID, notes: str) -> None:
+        """
+        Edit the notes of an account.
+
+        Args:
+            plan_id: The ID of the plan
+            account_id: The ID of the account
+            notes: The new notes for the account
+        """
+        plan = self.get_plan(plan_id)
+        plan.edit_account_notes(account_id, notes)
+        self.save(plan)

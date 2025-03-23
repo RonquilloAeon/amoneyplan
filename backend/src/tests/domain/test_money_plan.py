@@ -250,3 +250,18 @@ def test_set_account_checked_state():
         e for e in plan.pending_events if e.__class__.__name__ == "AccountCheckedStateSet"
     ]
     assert len(checked_state_events) == 2
+
+
+def test_edit_plan_notes(money_plan):
+    """Test editing the notes of a plan."""
+    money_plan.edit_plan_notes("New plan notes")
+    assert money_plan.notes == "New plan notes"
+
+
+def test_edit_account_notes(money_plan):
+    """Test editing the notes of an account."""
+    account_id = uuid4()
+    money_plan.add_account(account_id, name="Test Account")
+    money_plan.edit_account_notes(account_id, "New account notes")
+    account = money_plan.accounts[account_id].account
+    assert account.notes == "New account notes"

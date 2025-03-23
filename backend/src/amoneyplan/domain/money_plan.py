@@ -504,6 +504,44 @@ class MoneyPlan(Aggregate):
         # Remove the account
         del self.accounts[account_id]
 
+    @event("PlanNotesEdited")
+    def edit_plan_notes(self, notes: str):
+        """
+        Edit the notes of the plan.
+
+        Args:
+            notes: The new notes for the plan
+
+        Raises:
+            MoneyPlanError: If the plan is archived
+        """
+        self._check_not_archived()
+        self.notes = notes
+
+    @event("AccountNotesEdited")
+    def edit_account_notes(self, account_id: Union[UUID, str], notes: str):
+        """
+        Edit the notes of an account.
+
+        Args:
+            account_id: The ID of the account
+            notes: The new notes for the account
+
+        Raises:
+            AccountNotFoundError: If the account ID doesn't exist
+            MoneyPlanError: If the plan is archived
+        """
+        self._check_not_archived()
+
+        if isinstance(account_id, str):
+            account_id = UUID(account_id)
+
+        if account_id not in self.accounts:
+            raise AccountNotFoundError(f"Account with ID {account_id} not found")
+
+        account = self.accounts[account_id].account
+        account.notes = notes
+
     def get_last_added_account_id(self) -> Optional[UUID]:
         """Get the ID of the last account that was added."""
         return getattr(self, "_last_added_account_id", None)

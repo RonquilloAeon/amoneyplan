@@ -1,8 +1,9 @@
 <template>
   <div class="mb-2 md:mb-4 bg-base-200 rounded-box">
     <!-- Card Header - Always visible -->
-    <div class="p-3 md:p-4 flex justify-between items-center">
-      <div class="flex flex-col gap-1">
+    <div class="p-3 md:p-4 flex justify-between items-start">
+      <!-- Left side with account info and progress bar -->
+      <div class="flex flex-col gap-1 w-3/5">
         <!-- Account name and total -->
         <div class="flex items-center gap-2">
           <span class="text-lg md:text-xl font-bold text-primary">${{ formattedAccountTotal }}</span>
@@ -15,10 +16,10 @@
         </div>
 
         <!-- Progress bar showing percentage of total plan -->
-        <div class="w-full max-w-xs">
+        <div class="w-full">
           <div class="flex justify-between items-center mb-1 text-xs">
-            <span>Progress</span>
-            <span>{{ progressPercentage }}%</span>
+            <span>% of Plan</span>
+            <span class="font-bold">{{ progressPercentage }}%</span>
           </div>
           <progress 
             class="progress w-full" 
@@ -29,6 +30,7 @@
         </div>
       </div>
 
+      <!-- Right side with buttons -->
       <div class="flex items-center gap-2">
         <!-- Action buttons -->
         <div class="flex gap-1 mr-2">
@@ -39,7 +41,7 @@
             class="btn btn-ghost btn-xs btn-square"
             title="Edit account notes"
           >
-            <i class="fa-solid fa-file-lines text-secondary"></i>
+            <i class="fa-solid fa-file-lines text-info"></i>
           </button>
           
           <!-- Edit account button -->
@@ -108,6 +110,7 @@
               <th>Bucket Name</th>
               <th>Category</th>
               <th>Allocated Amount</th>
+              <th>% of Plan</th>
             </tr>
           </thead>
           <tbody>
@@ -115,11 +118,13 @@
               <td>{{ bucket.bucketName }}</td>
               <td>{{ bucket.category || 'N/A' }}</td>
               <td>${{ bucket.allocatedAmount.toFixed(2) }}</td>
+              <td>{{ calculateBucketPercentage(bucket) }}%</td>
             </tr>
             <!-- Account total row -->
             <tr class="font-semibold border-t">
               <td colspan="2" class="text-right">Account Total:</td>
               <td>${{ formattedAccountTotal }}</td>
+              <td>{{ progressPercentage }}%</td>
             </tr>
           </tbody>
         </table>
@@ -203,6 +208,12 @@ function getProgressBarColor(): string {
   if (percentage < 50) return 'progress-info';
   if (percentage < 75) return 'progress-success';
   return 'progress-warning';
+}
+
+// Calculate the percentage of a bucket's allocated amount relative to the plan initial balance
+function calculateBucketPercentage(bucket: Bucket): number {
+  if (props.planInitialBalance <= 0) return 0;
+  return Math.round((bucket.allocatedAmount / props.planInitialBalance) * 100);
 }
 </script>
 

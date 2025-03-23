@@ -50,7 +50,7 @@
           class="btn btn-ghost btn-sm btn-square"
           title="Edit plan notes"
         >
-          <i class="fa-solid fa-file-lines text-secondary"></i>
+          <i class="fa-solid fa-file-lines text-info"></i>
         </button>
       </div>
       

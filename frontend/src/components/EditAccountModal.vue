@@ -10,18 +10,6 @@
           <div class="text-lg">${{ remainingBalance.toFixed(2) }}</div>
         </div>
       </div>
-
-      <div class="form-control w-full mb-4">
-        <label class="cursor-pointer label justify-start gap-4">
-          <input 
-            type="checkbox" 
-            :checked="isChecked"
-            @change="toggleAccountCheck" 
-            class="checkbox checkbox-primary" 
-          />
-          <span class="label-text">Mark account as checked off</span>
-        </label>
-      </div>
       
       <form @submit.prevent="updateAccount">
         <div class="divider">Buckets</div>
@@ -339,12 +327,18 @@ const SET_ACCOUNT_CHECKED_STATE_MUTATION = gql`
             id
             name
             isChecked
+            notes
             buckets {
               bucketName
               category
               allocatedAmount
             }
           }
+          initialBalance
+          remainingBalance
+          timestamp
+          isCommitted
+          isArchived
         }
       }
     }
@@ -375,6 +369,9 @@ async function toggleAccountCheck() {
 
     // Success! Emit update event
     emit('accountUpdated', response.data.moneyPlan.setAccountCheckedState.moneyPlan);
+    
+    // Close the modal after successful toggle
+    emit('close');
   } catch (error) {
     errorMessage.value = (error as Error).message;
   }

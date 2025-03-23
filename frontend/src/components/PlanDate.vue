@@ -12,17 +12,33 @@ defineProps<{
   timestamp: string;
 }>();
 
-const formatDate = (timestamp: string) => {
-  const date = new Date(timestamp);
-  return new Intl.DateTimeFormat(undefined, { 
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-  }).format(date);
+const formatDate = (timestamp: string | undefined) => {
+  if (!timestamp) {
+    return "Date unavailable";
+  }
+  try {
+    const date = new Date(timestamp);
+    return new Intl.DateTimeFormat(undefined, { 
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    }).format(date);
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "Invalid date";
+  }
 };
 
-const formatDistanceToNow = (timestamp: string) => {
-  return dateFnsFormatDistanceToNow(new Date(timestamp));
+const formatDistanceToNow = (timestamp: string | undefined) => {
+  if (!timestamp) {
+    return "unknown time";
+  }
+  try {
+    return dateFnsFormatDistanceToNow(new Date(timestamp));
+  } catch (error) {
+    console.error("Error calculating distance:", error);
+    return "unknown time";
+  }
 };
 </script>

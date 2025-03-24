@@ -18,6 +18,13 @@
           />
         </div>
         
+        <div class="form-control w-full mb-3 md:mb-4">
+          <label class="label py-1">
+            <span class="label-text text-sm md:text-base">Copy from previous plan (optional)</span>
+          </label>
+          <CopyFromSelect v-model="selectedPlanId" />
+        </div>
+        
         <div class="form-control w-full mb-4 md:mb-6">
           <label class="label py-1">
             <span class="label-text text-sm md:text-base">Notes (optional)</span>
@@ -33,6 +40,7 @@
           <button type="submit" class="btn btn-primary btn-sm md:btn-md">Start Plan</button>
         </div>
       </form>
+      
       <form method="dialog">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="$emit('close')">✕</button>
       </form>
@@ -44,9 +52,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineEmits } from 'vue';
+import { ref } from 'vue';
 import { useMutation } from '@urql/vue';
 import gql from 'graphql-tag';
+import CopyFromSelect from './CopyFromSelect.vue';
 
 const emit = defineEmits(['close', 'planCreated']);
 
@@ -81,10 +90,18 @@ const START_PLAN_MUTATION = gql`
 
 const initialBalance = ref(0);
 const notes = ref('');
+const selectedPlanId = ref('');
 const { executeMutation } = useMutation(START_PLAN_MUTATION);
 
 const startPlan = async () => {
-  const variables = { input: { initialBalance: initialBalance.value, notes: notes.value } };
+  const variables = { 
+    input: { 
+      initialBalance: initialBalance.value, 
+      notes: notes.value,
+      copyFrom: selectedPlanId.value ? selectedPlanId.value : null
+    } 
+  };
+  
   const response = await executeMutation(variables);
   if (!response.error) {
     // Emit the new plan to the parent component

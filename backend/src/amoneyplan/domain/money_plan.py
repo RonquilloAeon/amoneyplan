@@ -320,6 +320,7 @@ class MoneyPlan(Aggregate):
         new_buckets = {}
         new_total = Money(0)
 
+        # Process each bucket configuration
         for config in new_bucket_config:
             bucket = Bucket(
                 bucket_name=config.bucket_name,
@@ -327,7 +328,7 @@ class MoneyPlan(Aggregate):
                 allocated_amount=config.allocated_amount,
             )
             new_buckets[bucket.bucket_name] = bucket
-            new_total += config.allocated_amount
+            new_total += bucket.allocated_amount
 
         # Calculate adjustment needed to remaining balance
         adjustment = current_total - new_total

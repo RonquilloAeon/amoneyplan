@@ -164,6 +164,7 @@ class PlanStartInput:
     initial_balance: float
     notes: str = ""
     default_allocations: Optional[List[AccountAllocationConfigInput]] = None
+    copy_from: Optional[relay.GlobalID] = None
 
 
 @strawberry.input
@@ -420,15 +421,24 @@ class MoneyPlanMutations:
         service.user_id = str(info.context.request.user.id)
 
         try:
-            default_allocations = None
-            if input.default_allocations:
-                default_allocations = [config.to_domain() for config in input.default_allocations]
+            if input.copy_from:
+                # Create plan by copying structure from existing plan
+                plan_id = service.copy_plan_structure(
+                    source_plan_id=UUID(input.copy_from.node_id),
+                    initial_balance=input.initial_balance,
+                    notes=input.notes,
+                )
+            else:
+                # Create plan with provided allocations if any
+                default_allocations = None
+                if input.default_allocations:
+                    default_allocations = [config.to_domain() for config in input.default_allocations]
 
-            plan_id = service.create_plan(
-                initial_balance=input.initial_balance,
-                default_allocations=default_allocations,
-                notes=input.notes,
-            )
+                plan_id = service.create_plan(
+                    initial_balance=input.initial_balance,
+                    default_allocations=default_allocations,
+                    notes=input.notes,
+                )
 
             plan = service.get_plan(plan_id)
             return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)

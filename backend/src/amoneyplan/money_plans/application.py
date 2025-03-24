@@ -46,6 +46,34 @@ class BucketConfigTranscoding(Transcoding):
         )
 
 
+class AccountAllocationConfigTranscoding(Transcoding):
+    """Custom transcoding for AccountAllocationConfig class."""
+
+    type = AccountAllocationConfig
+    name = "account_allocation_config"
+
+    def encode(self, obj: AccountAllocationConfig) -> dict:
+        """Convert AccountAllocationConfig to a dictionary for serialization."""
+        logger.info("Encoding AccountAllocationConfig %s", obj)
+
+        # Convert buckets using BucketConfigTranscoding
+        bucket_transcoding = BucketConfigTranscoding()
+        return {
+            "account_id": str(obj.account_id),
+            "name": obj.name,
+            "buckets": [bucket_transcoding.encode(b) for b in obj.buckets] if obj.buckets else [],
+        }
+
+    def decode(self, data: dict) -> AccountAllocationConfig:
+        """Convert dictionary to AccountAllocationConfig for deserialization."""
+        bucket_transcoding = BucketConfigTranscoding()
+        return AccountAllocationConfig(
+            account_id=UUID(data["account_id"]),
+            name=data["name"],
+            buckets=[bucket_transcoding.decode(b) for b in data["buckets"]] if data["buckets"] else None,
+        )
+
+
 class MoneyPlanner(Application):
     """
     Service for creating and managing Money Plans.
@@ -64,6 +92,7 @@ class MoneyPlanner(Application):
     def register_transcodings(self, transcoder):
         super().register_transcodings(transcoder)
         transcoder.register(BucketConfigTranscoding())
+        transcoder.register(AccountAllocationConfigTranscoding())
 
     def _get_current_plan_id(self) -> Optional[UUID]:
         """Get the current uncommitted plan ID by checking the most recent plans."""
@@ -394,3 +423,72 @@ class MoneyPlanner(Application):
         plan = self.get_plan(plan_id)
         plan.edit_account_notes(account_id, notes)
         self.save(plan)
+
+    def copy_plan_structure(
+        self,
+        source_plan_id: UUID,
+        initial_balance: Union[Money, float, str],
+        notes: str = "",
+    ) -> UUID:
+        """
+        Create a new plan with the account structure copied from an existing plan.
+        All allocations in the new plan will be set to zero.
+
+        Args:
+            source_plan_id: The ID of the plan to copy structure from
+            initial_balance: The initial balance for the new plan
+            notes: Optional notes for the new plan
+
+        Returns:
+            The ID of the new plan
+
+        Raises:
+            KeyError: If the source plan doesn't exist
+            PlanAlreadyCommittedError: If there's an uncommitted plan already
+        """
+        # Check if there's already an uncommitted plan (reuse existing check)
+        current_plan_id = self._get_current_plan_id()
+        if current_plan_id is not None:
+            try:
+                plan = self.get_plan(current_plan_id)
+                if not plan.committed:
+                    raise PlanAlreadyCommittedError(
+                        "There is already an uncommitted plan. Commit it before creating a new one."
+                    )
+            except AggregateNotFoundError:
+                # Plan doesn't exist anymore, we can proceed
+                pass
+
+        # Get the source plan to copy from
+        source_plan = self.get_plan(source_plan_id)
+
+        default_allocations = None
+        if source_plan and source_plan.accounts:
+            # Extract accounts and buckets from the source plan
+            default_allocations = []
+
+            for account_id, allocation in source_plan.accounts.items():
+                account = allocation.account
+                buckets = []
+
+                # Create bucket configs with zero allocations
+                for bucket_name, bucket in account.buckets.items():
+                    buckets.append(
+                        BucketConfig(
+                            bucket_name=bucket.bucket_name,
+                            category=bucket.category,
+                            allocated_amount=Money(0),  # Start with zero allocations
+                        )
+                    )
+
+                # Create account allocation config
+                default_allocations.append(
+                    AccountAllocationConfig(account_id=account.account_id, name=account.name, buckets=buckets)
+                )
+
+            logger.info(f"Copied {len(default_allocations)} account structures from plan {source_plan_id}")
+
+        # Create new plan using the copied structure
+        return self.create_plan(
+            initial_balance=initial_balance, default_allocations=default_allocations, notes=notes
+        )

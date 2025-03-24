@@ -242,8 +242,6 @@ class TestNotesSchema(TestGraphQLAPI):
             },
         )
 
-        print("X>>>>", result)
-
         # Check the result
         assert "errors" not in result
         assert not result["moneyPlan"]["editAccountNotes"]["success"]

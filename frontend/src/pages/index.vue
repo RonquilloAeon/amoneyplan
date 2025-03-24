@@ -44,9 +44,7 @@
                   :disabled="isArchivingPlan"
                   title="Archive this draft plan if you no longer need it"
                 >
-                  <svg v-if="!isArchivingPlan" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m8.25 3v6.75m0-6.75h-3m3 0h3M12 3v1.5m-2.25 0h4.5" />
-                  </svg>
+                  <i v-if="!isArchivingPlan" class="fa-solid fa-box-archive"></i>
                 </button>
               </div>
             </div>

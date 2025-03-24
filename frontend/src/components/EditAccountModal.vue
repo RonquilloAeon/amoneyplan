@@ -211,7 +211,7 @@ const remainingBalance = computed(() => {
 
 const isValid = computed(() => {
   return buckets.value.length > 0 && 
-    buckets.value.every(b => b.bucketName.trim() !== '' && b.category && b.allocatedAmount > 0) &&
+    buckets.value.every(b => b.bucketName.trim() !== '' && b.category && b.allocatedAmount >= 0) &&
     remainingBalance.value >= 0;
 });
 

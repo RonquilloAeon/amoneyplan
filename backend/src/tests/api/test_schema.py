@@ -718,3 +718,127 @@ class TestSchema(TestGraphQLAPI):
         assert result["moneyPlan"]["startPlan"]["moneyPlan"]["initialBalance"] == 2000.0
         assert not result["moneyPlan"]["startPlan"]["moneyPlan"]["isArchived"]
         assert not result["moneyPlan"]["startPlan"]["moneyPlan"]["isCommitted"]
+
+    def test_start_plan_with_copied_structure(self, client, money_planner):
+        """Test starting a plan with structure copied from a specific plan."""
+        # Create first plan with accounts and buckets
+        plan1_id = self.create_money_plan(client, 1000.0, "Plan 1")
+
+        # Add an account with specific buckets
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    success
+                    moneyPlan {
+                        accounts {
+                            id
+                            name
+                            buckets {
+                                bucketName
+                                category
+                                allocatedAmount
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        # Add first account with two buckets
+        account_variables = {
+            "input": {
+                "planId": plan1_id,
+                "name": "Checking Account",
+                "buckets": [
+                    {"bucketName": "Bills", "category": "expenses", "allocatedAmount": 600.0},
+                    {"bucketName": "Food", "category": "expenses", "allocatedAmount": 200.0},
+                ],
+            }
+        }
+        result = self.execute_query(client, add_account_mutation, account_variables)
+        assert result["moneyPlan"]["addAccount"]["success"]
+
+        # Add second account with one bucket
+        account_variables = {
+            "input": {
+                "planId": plan1_id,
+                "name": "Savings Account",
+                "buckets": [
+                    {"bucketName": "Emergency Fund", "category": "savings", "allocatedAmount": 200.0},
+                ],
+            }
+        }
+        result = self.execute_query(client, add_account_mutation, account_variables)
+        assert result["moneyPlan"]["addAccount"]["success"]
+
+        # Commit the plan
+        assert self.commit_plan(client, plan1_id)
+
+        # Now create a second plan with copied structure
+        create_plan_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    success
+                    error {
+                        message
+                    }
+                    moneyPlan {
+                        id
+                        initialBalance
+                        remainingBalance
+                        accounts {
+                            name
+                            buckets {
+                                bucketName
+                                category
+                                allocatedAmount
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        # Create new plan with the copy_from parameter set to the first plan's ID
+        variables = {
+            "input": {"initialBalance": 2000.0, "notes": "Plan with copied structure", "copyFrom": plan1_id}
+        }
+
+        result = self.execute_query(client, create_plan_mutation, variables)
+        assert "errors" not in result
+        assert result["moneyPlan"]["startPlan"]["success"]
+
+        # Verify the new plan has the same account structure but with zero allocations
+        new_plan = result["moneyPlan"]["startPlan"]["moneyPlan"]
+        assert new_plan["initialBalance"] == 2000.0
+        assert new_plan["remainingBalance"] == 2000.0  # No allocations yet
+
+        # Should have the same number of accounts
+        assert len(new_plan["accounts"]) == 2
+
+        # Verify account names and bucket structure were copied
+        accounts = {account["name"]: account for account in new_plan["accounts"]}
+
+        # Check first account (Checking Account)
+        checking = accounts.get("Checking Account")
+        assert checking is not None
+        assert len(checking["buckets"]) == 2
+        buckets = {b["bucketName"]: b for b in checking["buckets"]}
+        assert "Bills" in buckets
+        assert buckets["Bills"]["category"] == "expenses"
+        assert buckets["Bills"]["allocatedAmount"] == 0.0  # Zero allocation
+        assert "Food" in buckets
+        assert buckets["Food"]["category"] == "expenses"
+        assert buckets["Food"]["allocatedAmount"] == 0.0  # Zero allocation
+
+        # Check second account (Savings Account)
+        savings = accounts.get("Savings Account")
+        assert savings is not None
+        assert len(savings["buckets"]) == 1
+        assert savings["buckets"][0]["bucketName"] == "Emergency Fund"
+        assert savings["buckets"][0]["category"] == "savings"
+        assert savings["buckets"][0]["allocatedAmount"] == 0.0  # Zero allocation

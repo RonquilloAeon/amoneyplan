@@ -4,6 +4,7 @@ Application service for managing Money Plans.
 
 import logging
 from dataclasses import asdict
+from datetime import date, datetime, timezone
 from typing import Iterator, List, Optional, Union
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
@@ -74,6 +75,21 @@ class AccountAllocationConfigTranscoding(Transcoding):
         )
 
 
+class DateTranscoding(Transcoding):
+    """Custom transcoding for date class."""
+
+    type = date
+    name = "date"
+
+    def encode(self, obj: date) -> str:
+        """Convert date to ISO format string for serialization."""
+        return obj.isoformat()
+
+    def decode(self, data: str) -> date:
+        """Convert ISO format string to date for deserialization."""
+        return date.fromisoformat(data)
+
+
 class MoneyPlanner(Application):
     """
     Service for creating and managing Money Plans.
@@ -93,6 +109,7 @@ class MoneyPlanner(Application):
         super().register_transcodings(transcoder)
         transcoder.register(BucketConfigTranscoding())
         transcoder.register(AccountAllocationConfigTranscoding())
+        transcoder.register(DateTranscoding())
 
     def _get_current_plan_id(self) -> Optional[UUID]:
         """Get the current uncommitted plan ID by checking the most recent plans."""
@@ -111,6 +128,7 @@ class MoneyPlanner(Application):
         initial_balance: Union[Money, float, str],
         default_allocations: Optional[List[AccountAllocationConfig]] = None,
         notes: str = "",
+        plan_date: Optional[date] = None,
     ) -> UUID:
         """
         Create a new Money Plan.
@@ -119,6 +137,7 @@ class MoneyPlanner(Application):
             initial_balance: The initial balance for the plan
             default_allocations: Optional list of account allocation configurations
             notes: Optional notes for the plan
+            plan_date: Optional date for the plan
 
         Returns:
             The ID of the new plan
@@ -139,9 +158,20 @@ class MoneyPlanner(Application):
                 # Plan doesn't exist anymore, we can proceed
                 pass
 
-        # Create new plan
+        # Create new
+        created_at = datetime.now(timezone.utc)
+
+        if plan_date is None:
+            plan_date = date.today()
+
         plan = MoneyPlan()
-        plan.start_plan(initial_balance=initial_balance, default_allocations=default_allocations, notes=notes)
+        plan.start_plan(
+            initial_balance=initial_balance,
+            created_at=created_at,
+            plan_date=plan_date,
+            default_allocations=default_allocations,
+            notes=notes,
+        )
         plan_logged = self.plan_log.trigger_event(plan_id=plan.id)
 
         # Save the plan
@@ -162,7 +192,13 @@ class MoneyPlanner(Application):
         Raises:
             KeyError: If the plan doesn't exist
         """
-        return self.repository.get(plan_id)
+        plan = self.repository.get(plan_id)
+
+        # TODO: Remove find a better way to set the plan date
+        if not plan.plan_date:
+            plan.plan_date = plan.created_on.date()
+
+        return plan
 
     def get_current_plan(self) -> Optional[MoneyPlan]:
         """
@@ -491,4 +527,23 @@ class MoneyPlanner(Application):
         # Create new plan using the copied structure
         return self.create_plan(
             initial_balance=initial_balance, default_allocations=default_allocations, notes=notes
+        )
+
+    def start_plan(
+        self,
+        initial_balance: Union[Money, float, str],
+        default_allocations: Optional[List[AccountAllocationConfig]] = None,
+        plan_date: Optional[date] = None,
+        notes: str = "",
+    ) -> UUID:
+        """Start a new money plan."""
+        plan = MoneyPlan()
+        now = datetime.now(timezone.utc)
+
+        plan.start_plan(
+            initial_balance=initial_balance,
+            created_at=now,
+            plan_date=plan_date or date.today(),
+            default_allocations=default_allocations,
+            notes=notes,
         )

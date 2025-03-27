@@ -3,7 +3,7 @@ Money Plan aggregate root for the personal money management app.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional, Union
 from uuid import UUID
 
@@ -81,6 +81,8 @@ class MoneyPlan(Aggregate):
     Implements the event sourcing pattern to track all changes as events.
     """
 
+    class_version = 2  # Increment version to handle missing created_at values
+
     def __init__(self):
         self.initial_balance = Money(0)
         self.remaining_balance = Money(0)
@@ -88,8 +90,24 @@ class MoneyPlan(Aggregate):
         self.notes = ""
         self.committed = False
         self.is_archived = False
-        self.timestamp = None
+        self.created_at = None
+        self.plan_date = None
         self.archived_at = None
+        self._last_added_account_id = None  # For returning the ID after add_account
+
+    @staticmethod
+    def upcast_v1_v2(state):
+        """
+        Upcast state from version 1 to version 2.
+        Sets created_at from the first event's timestamp if it's not set.
+        """
+        if not state.get("created_at"):
+            state["created_at"] = state["_created_on"]
+
+        if not state.get("plan_date"):
+            state["plan_date"] = state["created_at"].date()
+
+        return state
 
     def _check_not_archived(self):
         """Helper method to check if plan is not archived"""
@@ -100,16 +118,16 @@ class MoneyPlan(Aggregate):
     def start_plan(
         self,
         initial_balance: Union[Money, float, str],
+        created_at: Optional[datetime] = None,
+        plan_date: Optional[date] = None,
         default_allocations: Optional[List[AccountAllocationConfig]] = None,
         notes: str = "",
     ):
         """
         Start a new Money Plan with an initial balance and optional default allocations.
 
-        Args:
-            initial_balance: The starting balance for this plan
-            default_allocations: Optional list of account allocation configurations
-            notes: Free-text notes about this plan
+        For backward compatibility, created_at and plan_date are optional.
+        If not provided, created_at defaults to current time and plan_date to current date.
         """
         balance = (
             Money(initial_balance) if isinstance(initial_balance, (float, str, int)) else initial_balance
@@ -119,7 +137,10 @@ class MoneyPlan(Aggregate):
         self.remaining_balance = Money(balance.as_float)  # Create a new Money instance
         self.notes = notes
         self.committed = False
-        self.timestamp = datetime.utcnow()
+
+        # Handle backward compatibility for existing events
+        self.created_at = created_at
+        self.plan_date = plan_date
 
         # Process default allocations if provided
         if default_allocations:

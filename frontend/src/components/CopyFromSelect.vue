@@ -43,7 +43,7 @@
           >
             <div class="flex flex-col">
               <span class="font-medium">
-                Plan from {{ formatDate(plan.timestamp) }}
+                Plan from {{ formatDate(plan.planDate) }}
                 <span class="badge badge-sm ml-2" :class="plan.isCommitted ? 'badge-neutral' : 'badge-ghost'">
                   {{ plan.isCommitted ? 'Committed' : 'Draft' }}
                 </span>
@@ -82,7 +82,7 @@ const emit = defineEmits<{
 
 interface Plan {
   id: string;
-  timestamp: string;
+  planDate: string;
   notes: string;
   isCommitted: boolean;
 }
@@ -102,10 +102,10 @@ const hasMorePlans = computed(() => {
 });
 
 // Format date using the same format as PlanDate component
-const formatDate = (timestamp: string) => {
-  if (!timestamp) return "Date unavailable";
+const formatDate = (planDate: string | undefined) => {
+  if (!planDate) return "Date unavailable";
   try {
-    const date = new Date(timestamp);
+    const date = new Date(planDate);
     return new Intl.DateTimeFormat(undefined, { 
       day: 'numeric',
       month: 'long',
@@ -122,7 +122,7 @@ const formatDate = (timestamp: string) => {
 const getSelectedPlanDisplay = () => {
   const selectedPlan = plans.value.find(p => p.id === props.modelValue);
   if (!selectedPlan) return '';
-  return `Plan from ${formatDate(selectedPlan.timestamp)}`;
+  return `Plan from ${formatDate(selectedPlan.planDate)}`;
 };
 
 // Handle option selection

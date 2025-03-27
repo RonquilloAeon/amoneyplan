@@ -3,6 +3,7 @@ GraphQL schema for the Money Plan API.
 """
 
 import logging
+from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
@@ -82,7 +83,8 @@ class MoneyPlan(relay.Node):
     notes: str
     is_committed: bool
     is_archived: bool
-    timestamp: Optional[str] = None
+    created_at: Optional[str] = None
+    plan_date: Optional[str] = None
     archived_at: Optional[str] = None
 
     @classmethod
@@ -106,7 +108,8 @@ class MoneyPlan(relay.Node):
             notes=domain_plan.notes,
             is_committed=domain_plan.committed,
             is_archived=domain_plan.is_archived,
-            timestamp=domain_plan.timestamp.isoformat() if domain_plan.timestamp else None,
+            created_at=domain_plan.created_at.isoformat() if domain_plan.created_at else None,
+            plan_date=domain_plan.plan_date.isoformat() if domain_plan.plan_date else None,
             archived_at=domain_plan.archived_at.isoformat() if domain_plan.archived_at else None,
         )
         return plan
@@ -163,6 +166,7 @@ class AccountAllocationConfigInput:
 class PlanStartInput:
     initial_balance: float
     notes: str = ""
+    plan_date: Optional[date] = None
     default_allocations: Optional[List[AccountAllocationConfigInput]] = None
     copy_from: Optional[relay.GlobalID] = None
 
@@ -438,6 +442,7 @@ class MoneyPlanMutations:
                     initial_balance=input.initial_balance,
                     default_allocations=default_allocations,
                     notes=input.notes,
+                    plan_date=input.plan_date,
                 )
 
             plan = service.get_plan(plan_id)

@@ -6,7 +6,7 @@ export const PLANS_FOR_COPY = gql`
       edges {
         node {
           id
-          timestamp
+          planDate
           notes
           isCommitted
         }

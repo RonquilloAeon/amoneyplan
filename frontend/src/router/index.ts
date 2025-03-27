@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { watch } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import GoogleAuthCallback from '../components/GoogleAuthCallback.vue';
 

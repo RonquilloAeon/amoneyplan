@@ -24,11 +24,17 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.sites",
     # Third party apps
     "corsheaders",
     "strawberry.django",
     "eventsourcing_django",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     # Local apps
+    "amoneyplan.users",
     "amoneyplan.money_plans",
     "amoneyplan.eventsourcing_runner",
 ]
@@ -42,6 +48,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = "amoneyplan.urls"
@@ -140,10 +147,20 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # In development allow all origins
-# For production, specify allowed origins:
-# CORS_ALLOWED_ORIGINS = [
-#     "https://yourappdomain.com",
-# ]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
+
+FRONTEND_URL = "http://localhost:5173"  # Development frontend URL
+
+# Session settings
+SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "Strict"
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
@@ -156,4 +173,32 @@ CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "Strict"
 EVENT_SOURCING_SETTINGS = {
     "PERSISTENCE_MODULE": "eventsourcing_django",
     "SNAPSHOT_THRESHOLD": 50,  # Take snapshots after 50 events
+}
+
+# Custom user model
+AUTH_USER_MODEL = "users.User"
+
+# Authentication settings
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+# django-allauth settings
+SITE_ID = 1
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
+ACCOUNT_EMAIL_VERIFICATION = "none"  # TODO Change to "mandatory" in production
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APP": {
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            "key": "",
+        },
+        "SCOPE": [
+            "profile",
+            "email",
+        ],
+    }
 }

@@ -19,6 +19,7 @@ from amoneyplan.domain.money_plan import (
     MoneyPlanError,
     PlanAlreadyCommittedError,
 )
+from amoneyplan.users.schema import AuthMutations, AuthQueries
 
 logger = logging.getLogger("amoneyplan")
 
@@ -255,7 +256,7 @@ class EditAccountNotesInput:
 
 # GraphQL queries
 @strawberry.type
-class Query:
+class Query(AuthQueries):
     @strawberry.field
     def money_plan(self, info: Info, plan_id: Optional[relay.GlobalID] = None) -> Optional[MoneyPlan]:
         """
@@ -291,6 +292,13 @@ class Query:
         filter: Optional[MoneyPlanFilter] = None,
     ) -> MoneyPlanConnection:
         """Get a paginated list of money plans."""
+        if not info.context.request.user.is_authenticated:
+            return MoneyPlanConnection(
+                edges=[],
+                page_info=relay.PageInfo(
+                    has_next_page=False, has_previous_page=False, start_cursor=None, end_cursor=None
+                ),
+            )
         try:
             service = apps.get_app_config("money_plans").money_planner
 
@@ -684,6 +692,10 @@ class Mutation:
     @strawberry.field
     def money_plan(self, info: Info) -> MoneyPlanMutations:
         return MoneyPlanMutations()
+
+    @strawberry.field
+    def auth(self, info: Info) -> AuthMutations:
+        return AuthMutations()
 
 
 # Create the GraphQL schema

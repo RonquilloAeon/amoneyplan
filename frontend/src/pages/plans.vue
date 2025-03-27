@@ -85,7 +85,7 @@ interface Account {
 
 interface MoneyPlan {
   id: string;
-  timestamp: string;
+  planDate: string;
   accounts: Account[];
   isCommitted: boolean;
   isArchived: boolean;
@@ -126,8 +126,7 @@ const GET_MONEY_PLANS = `
       edges {
         node {
           id
-          timestamp
-          notes
+          planDate
           accounts {
             id
             name
@@ -143,6 +142,7 @@ const GET_MONEY_PLANS = `
           isArchived
           initialBalance
           remainingBalance
+          notes
         }
       }
     }

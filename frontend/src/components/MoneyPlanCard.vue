@@ -3,7 +3,7 @@
     <div class="card-body p-4 md:p-6">
       <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h2 class="card-title text-base md:text-lg">
-          <PlanDate :timestamp="plan.timestamp" />
+          <PlanDate :planDate="plan.planDate" />
         </h2>
         <div class="flex gap-2 items-center">
           <div class="badge badge-md md:badge-lg" :class="getBadgeClass()">
@@ -115,7 +115,7 @@ interface Account {
 
 interface MoneyPlan {
   id: string;
-  timestamp: string;
+  planDate: string;
   accounts: Account[];
   isCommitted: boolean;
   isArchived: boolean;

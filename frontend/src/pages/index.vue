@@ -31,7 +31,7 @@
           <div class="card-body p-4 md:p-6">
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
               <h2 class="card-title text-base md:text-lg">
-                <PlanDate :timestamp="draftPlan.timestamp" />
+                <PlanDate :planDate="draftPlan.planDate" />
               </h2>
               <div class="flex gap-2 items-center">
                 <div class="badge badge-md md:badge-lg badge-ghost">
@@ -236,7 +236,7 @@ interface Account {
 
 interface MoneyPlan {
   id: string;
-  timestamp: string;
+  planDate: string;
   accounts: Account[];
   isCommitted: boolean;
   isArchived: boolean;
@@ -290,7 +290,7 @@ const REMOVE_ACCOUNT_MUTATION = `
           }
           initialBalance
           remainingBalance
-          timestamp
+          planDate
           notes
         }
       }
@@ -321,7 +321,7 @@ const SET_ACCOUNT_CHECKED_MUTATION = `
           }
           initialBalance
           remainingBalance
-          timestamp
+          planDate
           notes
         }
       }
@@ -360,6 +360,7 @@ const GET_MONEY_PLANS = `
       edges {
         node {
           id
+          planDate
           accounts {
             id
             name
@@ -375,7 +376,6 @@ const GET_MONEY_PLANS = `
           isArchived
           initialBalance
           remainingBalance
-          timestamp
           notes
         }
       }
@@ -621,12 +621,7 @@ function handleAccountNotesUpdated(updatedPlan: MoneyPlan) {
   // Find and update the plan in our list
   const index = moneyPlans.value.findIndex(plan => plan.id === updatedPlan.id);
   if (index !== -1) {
-    // Preserve the timestamp and merge the updated plan data
-    const existingTimestamp = moneyPlans.value[index].timestamp;
-    moneyPlans.value[index] = {
-      ...updatedPlan,
-      timestamp: existingTimestamp || updatedPlan.timestamp
-    };
+    moneyPlans.value[index] = updatedPlan;
   }
   showToast('Account notes updated successfully', 'alert-success');
 }

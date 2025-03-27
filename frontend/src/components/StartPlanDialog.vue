@@ -69,7 +69,7 @@ const START_PLAN_MUTATION = gql`
         success
         moneyPlan {
           id
-          timestamp
+          planDate
           notes
           accounts {
             name

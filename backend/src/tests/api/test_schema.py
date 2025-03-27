@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pytest
 from utils import TestGraphQLAPI
 
@@ -842,3 +844,29 @@ class TestSchema(TestGraphQLAPI):
         assert savings["buckets"][0]["bucketName"] == "Emergency Fund"
         assert savings["buckets"][0]["category"] == "savings"
         assert savings["buckets"][0]["allocatedAmount"] == 0.0  # Zero allocation
+
+    def test_create_plan_with_future_date(self, client, money_planner):
+        """Test creating a plan with a future date."""
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+
+        mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    success
+                    moneyPlan {
+                        id
+                        planDate
+                        createdAt
+                    }
+                }
+            }
+        }
+        """
+        variables = {"input": {"initialBalance": 1000.0, "notes": "Future plan", "planDate": future_date}}
+
+        result = self.execute_query(client, mutation, variables)
+        assert "errors" not in result
+        assert result["moneyPlan"]["startPlan"]["success"]
+        assert result["moneyPlan"]["startPlan"]["moneyPlan"]["planDate"] == future_date
+        assert result["moneyPlan"]["startPlan"]["moneyPlan"]["createdAt"] is not None

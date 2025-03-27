@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col sm:flex-row sm:items-center gap-1">
-    <span>{{ formatDate(timestamp) }}</span>
-    <span class="text-sm text-base-content/70">({{ formatDistanceToNow(timestamp) }} ago)</span>
+    <span>{{ formatDate(planDate) }}</span>
+    <span class="text-sm text-base-content/70">({{ formatDistanceToNow(planDate) }} ago)</span>
   </div>
 </template>
 
@@ -9,15 +9,15 @@
 import { formatDistanceToNow as dateFnsFormatDistanceToNow } from 'date-fns';
 
 defineProps<{
-  timestamp: string;
+  planDate: string;
 }>();
 
-const formatDate = (timestamp: string | undefined) => {
-  if (!timestamp) {
+const formatDate = (planDate: string | undefined) => {
+  if (!planDate) {
     return "Date unavailable";
   }
   try {
-    const date = new Date(timestamp);
+    const date = new Date(planDate);
     return new Intl.DateTimeFormat(undefined, { 
       day: 'numeric',
       month: 'long',
@@ -30,12 +30,12 @@ const formatDate = (timestamp: string | undefined) => {
   }
 };
 
-const formatDistanceToNow = (timestamp: string | undefined) => {
-  if (!timestamp) {
+const formatDistanceToNow = (planDate: string | undefined) => {
+  if (!planDate) {
     return "unknown time";
   }
   try {
-    return dateFnsFormatDistanceToNow(new Date(timestamp));
+    return dateFnsFormatDistanceToNow(new Date(planDate));
   } catch (error) {
     console.error("Error calculating distance:", error);
     return "unknown time";

@@ -1,17 +1,13 @@
-"""
-GraphQL schema for the Money Plan API.
-"""
-
 import logging
 from datetime import date
 from typing import List, Optional
-from uuid import UUID
 
 import strawberry
 from django.apps import apps
 from strawberry import relay
 from strawberry.types import Info
 
+from amoneyplan.accounts.schema import AuthMutations, AuthQueries
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import (
     AccountAllocationConfig,
@@ -19,7 +15,6 @@ from amoneyplan.domain.money_plan import (
     MoneyPlanError,
     PlanAlreadyCommittedError,
 )
-from amoneyplan.users.schema import AuthMutations, AuthQueries
 
 logger = logging.getLogger("amoneyplan")
 
@@ -51,7 +46,7 @@ class Bucket(relay.Node):
 
 @strawberry.type
 class Account(relay.Node):
-    id: relay.NodeID[UUID]
+    id: relay.NodeID[str]
     name: str
     buckets: List[Bucket]
     is_checked: bool
@@ -77,7 +72,7 @@ class Account(relay.Node):
 
 @strawberry.type
 class MoneyPlan(relay.Node):
-    id: relay.NodeID[UUID]
+    id: relay.NodeID[str]
     initial_balance: float
     remaining_balance: float
     accounts: List[Account]
@@ -90,10 +85,12 @@ class MoneyPlan(relay.Node):
 
     @classmethod
     def resolve_node(cls, node_id: str, info: Info) -> Optional["MoneyPlan"]:
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         try:
-            plan = service.get_plan(UUID(node_id))
-            return MoneyPlan.from_domain(plan)
+            plan_result = use_case.get_plan(node_id)
+            if plan_result.success and plan_result.has_data():
+                return MoneyPlan.from_domain(plan_result.data)
+            return None
         except (KeyError, ValueError):
             return None
 
@@ -157,7 +154,7 @@ class AccountAllocationConfigInput:
 
     def to_domain(self) -> AccountAllocationConfig:
         return AccountAllocationConfig(
-            account_id=UUID(self.account_id) if self.account_id else UUID(),
+            account_id=self.account_id if self.account_id else None,
             account_name=self.name,
             buckets=[bucket.to_domain() for bucket in self.buckets],
         )
@@ -262,23 +259,25 @@ class Query(AuthQueries):
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
-        service = apps.get_app_config("money_plans").money_planner
-
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         if plan_id:
-            plan_id = UUID(plan_id.node_id)
+            plan_id = plan_id.node_id
+            plan_result = use_case.get_plan(plan_id)
 
-            try:
-                plan = service.get_plan(plan_id)
-                return MoneyPlan.from_domain(plan)
-            except (KeyError, ValueError):
+            if plan_result.success and plan_result.has_data():
+                return MoneyPlan.from_domain(plan_result.data)
+            else:
+                logger.warning(f"Failed to get plan: {plan_result.message}")
                 return None
         else:
-            plan = service.get_current_plan()
-            if plan:
-                return MoneyPlan.from_domain(plan)
+            plan_result = use_case.get_current_plan()
+
+            if plan_result.success and plan_result.has_data():
+                return MoneyPlan.from_domain(plan_result.data)
+
             return None
 
     @strawberry.field
@@ -300,7 +299,7 @@ class Query(AuthQueries):
                 ),
             )
         try:
-            service = apps.get_app_config("money_plans").money_planner
+            use_case = apps.get_app_config("money_plans").money_planner
 
             # Convert cursor strings to notification positions
             after_pos = None if after is None else int(strawberry.relay.from_base64(after)[1])
@@ -319,7 +318,7 @@ class Query(AuthQueries):
                 gt_pos = after_pos
                 lte_pos = before_pos
 
-            plans_with_pos = list(service.get_plans(gt=gt_pos, lte=lte_pos, desc=desc, limit=first or last))
+            plans_with_pos = list(use_case.get_plans(gt=gt_pos, lte=lte_pos, desc=desc, limit=first or last))
 
             # Apply filters if provided
             if filter:
@@ -378,7 +377,7 @@ class Query(AuthQueries):
                 # When paginating forward with 'first':
                 has_next = bool(
                     list(
-                        service.get_plans(
+                        use_case.get_plans(
                             lte=min_pos - 1,  # Look for records with lower positions
                             limit=1,
                             desc=desc,
@@ -390,7 +389,7 @@ class Query(AuthQueries):
                 # When paginating backward with 'last':
                 has_next = bool(
                     list(
-                        service.get_plans(
+                        use_case.get_plans(
                             gt=max_pos,  # Look for records with higher positions
                             limit=1,
                             desc=desc,
@@ -428,33 +427,43 @@ class MoneyPlanMutations:
         """
         Start a new Money Plan.
         """
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
             if input.copy_from:
                 # Create plan by copying structure from existing plan
-                plan_id = service.copy_plan_structure(
-                    source_plan_id=UUID(input.copy_from.node_id),
+                plan_result = use_case.copy_plan_structure(
+                    source_plan_id=input.copy_from.node_id,
                     initial_balance=input.initial_balance,
                     notes=input.notes,
                 )
+                if not plan_result.success:
+                    return PlanResult(error=Error(message=plan_result.message), success=False)
+                plan_id = plan_result.data
             else:
                 # Create plan with provided allocations if any
                 default_allocations = None
                 if input.default_allocations:
                     default_allocations = [config.to_domain() for config in input.default_allocations]
 
-                plan_id = service.create_plan(
+                plan_result = use_case.create_plan(
                     initial_balance=input.initial_balance,
                     default_allocations=default_allocations,
                     notes=input.notes,
                     plan_date=input.plan_date,
                 )
 
-            plan = service.get_plan(plan_id)
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+                if not plan_result.success:
+                    return PlanResult(error=Error(message=plan_result.message), success=False)
+                plan_id = plan_result.data
+
+            get_plan_result = use_case.get_plan(plan_id)
+            if not get_plan_result.success:
+                return PlanResult(error=Error(message=get_plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(get_plan_result.data), success=True)
         except PlanAlreadyCommittedError as e:
             logger.warning("Cannot create new plan: %s", str(e))
             return PlanResult(error=Error(message=str(e)), success=False)
@@ -467,20 +476,26 @@ class MoneyPlanMutations:
         """
         Allocate funds to a bucket within an account.
         """
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.allocate_funds(
-                plan_id=UUID(input.plan_id),
+            result = use_case.allocate_funds(
+                plan_id=input.plan_id,
                 account_id=input.account_id,
                 bucket_name=input.bucket_name,
                 amount=input.amount,
             )
 
-            plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(input.plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 
@@ -489,21 +504,27 @@ class MoneyPlanMutations:
         """
         Reverse a previous allocation and apply a corrected amount.
         """
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.reverse_allocation(
-                plan_id=UUID(input.plan_id),
-                account_id=input.account_id,
+            result = use_case.reverse_allocation(
+                plan_id=input.plan_id.node_id,
+                account_id=input.account_id.node_id,
                 bucket_name=input.bucket_name,
                 original_amount=input.original_amount,
                 corrected_amount=input.corrected_amount,
             )
 
-            plan = service.get_plan(UUID(input.plan_id))
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(input.plan_id.node_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 
@@ -512,16 +533,24 @@ class MoneyPlanMutations:
         """
         Adjust the overall plan balance.
         """
-        service = apps.get_app_config("money_plans").money_planner
-        plan_id = UUID(input.plan_id.node_id)
+        use_case = apps.get_app_config("money_plans").money_planner
+        plan_id = input.plan_id.node_id
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.adjust_plan_balance(plan_id=plan_id, adjustment=input.adjustment, reason=input.reason)
+            result = use_case.adjust_plan_balance(
+                plan_id=plan_id, adjustment=input.adjustment, reason=input.reason
+            )
 
-            plan = service.get_plan(plan_id)
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 
@@ -530,22 +559,28 @@ class MoneyPlanMutations:
         """
         Change the bucket configuration for an account.
         """
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
             bucket_configs = [config.to_domain() for config in input.new_bucket_config]
-            plan_id = UUID(input.plan_id.node_id)
+            plan_id = input.plan_id.node_id
 
-            service.change_account_configuration(
+            result = use_case.change_account_configuration(
                 plan_id=plan_id,
-                account_id=UUID(input.account_id.node_id),
+                account_id=input.account_id.node_id,
                 new_bucket_config=bucket_configs,
             )
 
-            plan = service.get_plan(plan_id)
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 
@@ -554,61 +589,81 @@ class MoneyPlanMutations:
         """
         Add an account to a Money Plan.
         """
-        service = apps.get_app_config("money_plans").money_planner
-        plan_id = UUID(input.plan_id.node_id)
+        use_case = apps.get_app_config("money_plans").money_planner
+        plan_id = input.plan_id.node_id
         logger.info(f"Adding account '{input.name}' to plan {plan_id}")
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
-        try:
-            buckets = None
-            if input.buckets:
-                buckets = [bucket.to_domain() for bucket in input.buckets]
-                logger.info(f"With buckets: {[b.bucket_name for b in buckets]}")
-            else:
-                logger.info("No buckets specified, will use default bucket")
+        buckets = None
+        if input.buckets:
+            buckets = [bucket.to_domain() for bucket in input.buckets]
+            logger.info(f"With buckets: {[b.bucket_name for b in buckets]}")
+        else:
+            logger.info("No buckets specified, will use default bucket")
 
-            account_id = service.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
-            logger.info(f"Account created with ID: {account_id}")
+        # Call add_account method which now returns UseCaseResult
+        account_result = use_case.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
 
-            plan = service.get_plan(plan_id)
-            logger.info(f"Retrieved updated plan. Account count: {len(plan.accounts)}")
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
-        except (MoneyPlanError, ValueError) as e:
-            logger.error(f"Error adding account: {e}", exc_info=True)
-            return PlanResult(error=Error(message=str(e)), success=False)
+        if not account_result.success:
+            logger.error(f"Error adding account: {account_result.message}")
+            return PlanResult(error=Error(message=account_result.message), success=False)
+
+        # Get updated plan
+        plan_result = use_case.get_plan(plan_id)
+        if not plan_result.success:
+            logger.error(f"Error retrieving plan: {plan_result.message}")
+            return PlanResult(error=Error(message=plan_result.message), success=False)
+
+        logger.info(f"Account created with ID: {account_result.data}")
+        logger.info(f"Retrieved updated plan. Account count: {len(plan_result.data.accounts)}")
+
+        return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
 
     @strawberry.mutation
     def commit_plan(self, info: Info, input: CommitPlanInput) -> PlanResult:
         """
         Commit a Money Plan.
         """
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
-        try:
-            plan_id = UUID(input.plan_id.node_id)
-            service.commit_plan(plan_id=plan_id)
+        plan_id = input.plan_id.node_id
 
-            plan = service.get_plan(plan_id)
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
-        except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
+        # Call commit_plan method which now returns UseCaseResult
+        commit_result = use_case.commit_plan(plan_id=plan_id)
+
+        if not commit_result.success:
+            logger.error(f"Error committing plan: {commit_result.message}")
+            return PlanResult(error=Error(message=commit_result.message), success=False)
+
+        # Get updated plan
+        plan_result = use_case.get_plan(plan_id)
+        if not plan_result.success:
+            logger.error(f"Error retrieving plan: {plan_result.message}")
+            return PlanResult(error=Error(message=plan_result.message), success=False)
+
+        return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
 
     @strawberry.mutation
     def archive_plan(self, info: Info, input: ArchivePlanInput) -> PlanResult:
         """Archive a money plan to prevent further modifications."""
         try:
-            service = apps.get_app_config("money_plans").money_planner
-            plan_id = UUID(input.plan_id.node_id)
-            plan = service.get_plan(plan_id)
+            use_case = apps.get_app_config("money_plans").money_planner
+            use_case.user_id = str(info.context.request.user.id)
+            plan_id = input.plan_id.node_id
 
-            service.archive_plan(plan_id)
+            archive_result = use_case.archive_plan(plan_id)
+            if not archive_result.success:
+                return PlanResult(error=Error(message=archive_result.message), success=False)
 
             # Get updated plan state
-            plan = service.get_plan(plan_id)
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             logger.error("Error archiving plan: %s", str(e), exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
@@ -616,18 +671,25 @@ class MoneyPlanMutations:
     @strawberry.mutation
     def remove_account(self, info: Info, input: RemoveAccountInput) -> PlanResult:
         """Remove an account from a Money Plan."""
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.remove_account(
-                plan_id=UUID(input.plan_id.node_id),
-                account_id=UUID(input.account_id.node_id),
+            plan_id = input.plan_id.node_id
+            remove_result = use_case.remove_account(
+                plan_id=plan_id,
+                account_id=input.account_id.node_id,
             )
 
-            plan = service.get_plan(UUID(input.plan_id.node_id))
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            if not remove_result.success:
+                return PlanResult(error=Error(message=remove_result.message), success=False)
+
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error removing account: {e}", exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
@@ -635,19 +697,26 @@ class MoneyPlanMutations:
     @strawberry.mutation
     def set_account_checked_state(self, info: Info, input: SetAccountCheckedStateInput) -> PlanResult:
         """Set the checked state of an account."""
-        service = apps.get_app_config("money_plans").money_planner
+        use_case = apps.get_app_config("money_plans").money_planner
         # Set user ID from request context
-        service.user_id = str(info.context.request.user.id)
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.set_account_checked_state(
-                plan_id=UUID(input.plan_id.node_id),
-                account_id=UUID(input.account_id.node_id),
+            plan_id = input.plan_id.node_id
+            result = use_case.set_account_checked_state(
+                plan_id=plan_id,
+                account_id=input.account_id.node_id,
                 is_checked=input.is_checked,
             )
 
-            plan = service.get_plan(UUID(input.plan_id.node_id))
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error setting account checked state: {e}", exc_info=True)
             return PlanResult(error=Error(message=str(e)), success=False)
@@ -657,13 +726,21 @@ class MoneyPlanMutations:
         """
         Edit the notes of a plan.
         """
-        service = apps.get_app_config("money_plans").money_planner
-        service.user_id = str(info.context.request.user.id)
+        use_case = apps.get_app_config("money_plans").money_planner
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.edit_plan_notes(plan_id=UUID(input.plan_id.node_id), notes=input.notes)
-            plan = service.get_plan(UUID(input.plan_id.node_id))
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+            plan_id = input.plan_id.node_id
+            result = use_case.edit_plan_notes(plan_id=plan_id, notes=input.notes)
+
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 
@@ -672,17 +749,25 @@ class MoneyPlanMutations:
         """
         Edit the notes of an account.
         """
-        service = apps.get_app_config("money_plans").money_planner
-        service.user_id = str(info.context.request.user.id)
+        use_case = apps.get_app_config("money_plans").money_planner
+        use_case.user_id = str(info.context.request.user.id)
 
         try:
-            service.edit_account_notes(
-                plan_id=UUID(input.plan_id.node_id),
-                account_id=UUID(input.account_id.node_id),
+            plan_id = input.plan_id.node_id
+            result = use_case.edit_account_notes(
+                plan_id=plan_id,
+                account_id=input.account_id.node_id,
                 notes=input.notes,
             )
-            plan = service.get_plan(UUID(input.plan_id.node_id))
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan), success=True)
+
+            if not result.success:
+                return PlanResult(error=Error(message=result.message), success=False)
+
+            plan_result = use_case.get_plan(plan_id)
+            if not plan_result.success:
+                return PlanResult(error=Error(message=plan_result.message), success=False)
+
+            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
             return PlanResult(error=Error(message=str(e)), success=False)
 

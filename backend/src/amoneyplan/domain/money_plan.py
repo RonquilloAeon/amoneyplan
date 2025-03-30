@@ -7,8 +7,6 @@ from datetime import date, datetime
 from typing import Dict, List, Optional, Union
 from uuid import UUID
 
-from eventsourcing.domain import Aggregate, DomainEvent, event
-
 from amoneyplan.domain.account import Account, Bucket, PlanAccountAllocation
 from amoneyplan.domain.money import Money
 
@@ -75,14 +73,8 @@ class AccountAllocationConfig:
     buckets: List[BucketConfig]
 
 
-class MoneyPlan(Aggregate):
-    """
-    Money Plan aggregate root that manages the allocation of funds across accounts.
-    Implements the event sourcing pattern to track all changes as events.
-    """
-
-    class_version = 2  # Increment version to handle missing created_at values
-
+@dataclass(frozen=True)
+class MoneyPlan:
     def __init__(self):
         self.initial_balance = Money(0)
         self.remaining_balance = Money(0)
@@ -93,28 +85,7 @@ class MoneyPlan(Aggregate):
         self.created_at = None
         self.plan_date = None
         self.archived_at = None
-        self._last_added_account_id = None  # For returning the ID after add_account
 
-    @staticmethod
-    def upcast_v1_v2(state):
-        """
-        Upcast state from version 1 to version 2.
-        Sets created_at from the first event's timestamp if it's not set.
-        """
-        if not state.get("created_at"):
-            state["created_at"] = state["_created_on"]
-
-        if not state.get("plan_date"):
-            state["plan_date"] = state["created_at"].date()
-
-        return state
-
-    def _check_not_archived(self):
-        """Helper method to check if plan is not archived"""
-        if self.is_archived:
-            raise MoneyPlanError("Cannot modify an archived plan")
-
-    @event("PlanStarted")
     def start_plan(
         self,
         initial_balance: Union[Money, float, str],
@@ -162,7 +133,6 @@ class MoneyPlan(Aggregate):
                 # Add the account allocation to the plan
                 self.accounts[account.account_id] = PlanAccountAllocation(account=account)
 
-    @event("FundsAllocated")
     def allocate_funds(
         self, account_id: Union[UUID, str], bucket_name: str, amount: Union[Money, float, str]
     ):
@@ -215,7 +185,6 @@ class MoneyPlan(Aggregate):
         # Reduce the remaining balance
         self.remaining_balance -= amount
 
-    @event("AllocationReversed")
     def reverse_allocation(
         self,
         account_id: Union[UUID, str],
@@ -277,7 +246,6 @@ class MoneyPlan(Aggregate):
         bucket.allocated_amount += net_adjustment
         self.remaining_balance -= net_adjustment
 
-    @event("PlanBalanceAdjusted")
     def adjust_plan_balance(self, adjustment: Union[Money, float, str], reason: str = ""):
         """
         Adjust the overall plan balance.
@@ -301,7 +269,6 @@ class MoneyPlan(Aggregate):
         self.initial_balance += adjustment
         self.remaining_balance += adjustment
 
-    @event("AccountConfigurationChanged")
     def change_account_configuration(
         self, account_id: Union[UUID, str], new_bucket_config: List[BucketConfig]
     ):
@@ -358,8 +325,7 @@ class MoneyPlan(Aggregate):
         account.buckets = new_buckets
         self.remaining_balance += adjustment
 
-    @event("PlanCommitted")
-    def commit_plan(self):
+    def commit(self):
         """
         Commit the money plan, finalizing the allocations.
 
@@ -400,8 +366,7 @@ class MoneyPlan(Aggregate):
         # All invariants satisfied, commit the plan
         self.committed = True
 
-    @event("PlanArchived")
-    def archive_plan(self):
+    def archive(self):
         """
         Archive the money plan, preventing further modifications.
         Plans can be archived regardless of commitment status.
@@ -415,7 +380,6 @@ class MoneyPlan(Aggregate):
         self.is_archived = True
         self.archived_at = datetime.utcnow()
 
-    @event("AccountAdded")
     def add_account(
         self, account_id: UUID, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None
     ):
@@ -468,10 +432,6 @@ class MoneyPlan(Aggregate):
         # Add the account to the plan
         self.accounts[account_id] = PlanAccountAllocation(account=account)
 
-        # Store the ID so it's available after the event handler
-        self._last_added_account_id = account_id
-
-    @event("AccountCheckedStateSet")
     def set_account_checked_state(self, account_id: Union[UUID, str], is_checked: bool) -> None:
         """
         Set the checked state of an account.
@@ -495,7 +455,6 @@ class MoneyPlan(Aggregate):
                 "Account is already checked" if is_checked else "Account is already unchecked"
             )
 
-    @event("AccountRemoved")
     def remove_account(self, account_id: Union[UUID, str]):
         """
         Remove an account from the plan.
@@ -526,8 +485,7 @@ class MoneyPlan(Aggregate):
         # Remove the account
         del self.accounts[account_id]
 
-    @event("PlanNotesEdited")
-    def edit_plan_notes(self, notes: str):
+    def edit_notes(self, notes: str):
         """
         Edit the notes of the plan.
 
@@ -540,7 +498,6 @@ class MoneyPlan(Aggregate):
         self._check_not_archived()
         self.notes = notes
 
-    @event("AccountNotesEdited")
     def edit_account_notes(self, account_id: Union[UUID, str], notes: str):
         """
         Edit the notes of an account.
@@ -564,10 +521,6 @@ class MoneyPlan(Aggregate):
         account = self.accounts[account_id].account
         account.notes = notes
 
-    def get_last_added_account_id(self) -> Optional[UUID]:
-        """Get the ID of the last account that was added."""
-        return getattr(self, "_last_added_account_id", None)
-
     def get_total_allocated(self) -> Money:
         """
         Get the total amount allocated across all accounts and buckets.
@@ -576,7 +529,3 @@ class MoneyPlan(Aggregate):
         for account_allocation in self.accounts.values():
             total += account_allocation.get_total_allocated()
         return total
-
-
-class MoneyPlanLogged(DomainEvent):
-    plan_id: UUID

@@ -28,15 +28,13 @@ INSTALLED_APPS = [
     # Third party apps
     "corsheaders",
     "strawberry.django",
-    "eventsourcing_django",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
     # Local apps
-    "amoneyplan.users",
+    "amoneyplan.accounts",
     "amoneyplan.money_plans",
-    "amoneyplan.eventsourcing_runner",
 ]
 
 MIDDLEWARE = [
@@ -169,14 +167,8 @@ CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
 CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "Strict"
 
-# Event Sourcing configuration
-EVENT_SOURCING_SETTINGS = {
-    "PERSISTENCE_MODULE": "eventsourcing_django",
-    "SNAPSHOT_THRESHOLD": 50,  # Take snapshots after 50 events
-}
-
 # Custom user model
-AUTH_USER_MODEL = "users.User"
+AUTH_USER_MODEL = "accounts.User"
 
 # Authentication settings
 AUTHENTICATION_BACKENDS = [

@@ -1,5 +1,3 @@
-"""Pytest configuration for the test suite."""
-
 import os
 
 import django
@@ -10,7 +8,6 @@ from django.conf import settings
 # Configure Django settings for testing
 def pytest_configure():
     """Configure Django for testing."""
-    # Set the SQLite database name for event sourcing
     os.environ["SQLITE_DBNAME"] = ":memory:"
 
     settings.configure(
@@ -31,15 +28,13 @@ def pytest_configure():
             "django.contrib.sites",
             # Third party apps
             "strawberry.django",
-            "eventsourcing_django",
             "allauth",
             "allauth.account",
             "allauth.socialaccount",
             "allauth.socialaccount.providers.google",
             # Local apps
-            "amoneyplan.users",
+            "amoneyplan.accounts",
             "amoneyplan.money_plans",
-            "amoneyplan.eventsourcing_runner",
             "amoneyplan.api",
         ],
         MIDDLEWARE=[
@@ -50,10 +45,6 @@ def pytest_configure():
         ],
         ROOT_URLCONF="amoneyplan.urls",
         SECRET_KEY="test-key-not-for-production",
-        EVENT_SOURCING_SETTINGS={
-            "PERSISTENCE_MODULE": "eventsourcing.sqlite",
-            "SNAPSHOT_PERIOD": 0,  # Disable snapshots for testing
-        },
         TEMPLATES=[
             {
                 "BACKEND": "django.template.backends.django.DjangoTemplates",

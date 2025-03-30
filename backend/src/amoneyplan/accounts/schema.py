@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from strawberry.types import Info
 
-from amoneyplan.users.models import User
+from amoneyplan.accounts.models import User
 
 
 @strawberry.type

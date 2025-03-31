@@ -110,9 +110,8 @@ class PlanAccount(relay.Node):
             id=str(orm_account.id),
             name=orm_account.name,
             buckets=buckets,
-            # TODO: implement
-            is_checked=False,
-            notes="",
+            is_checked=orm_plan_account.is_checked,
+            notes=orm_plan_account.notes,
         )
         return account
 
@@ -343,6 +342,10 @@ class Query(AuthQueries):
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
+        # Check if user is authenticated
+        if not info.context.request.user.is_authenticated:
+            return None
+
         use_case = MoneyPlanUseCases()
 
         if plan_id:
@@ -639,22 +642,44 @@ class MoneyPlanMutations:
         else:
             logger.info("No buckets specified, will use default bucket")
 
-        # Call add_account method which now returns UseCaseResult
-        account_result = use_case.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
+        try:
+            # Check if the plan exists and belongs to the current user first
+            try:
+                plan_result = use_case.get_plan(plan_id)
+                if not plan_result.success:
+                    return graphql_common.ApplicationError(message=plan_result.message)
+            except (MoneyPlan.DoesNotExist, OrmMoneyPlan.DoesNotExist):
+                return graphql_common.ApplicationError(
+                    message="Plan not found or you don't have permission to modify it."
+                )
 
-        if not account_result.success:
-            logger.info(f"Error adding account: {account_result.message}")
-            return graphql_common.ApplicationError(message=f"Failed to add account: {account_result.message}")
+            # Call add_account method which now returns UseCaseResult
+            account_result = use_case.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
 
-        # Query for PlanAccount
-        # It's ok to use ORM here, following CQRS pattern
-        plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_result.data)
+            if not account_result.success:
+                logger.info(f"Error adding account: {account_result.message}")
+                return graphql_common.ApplicationError(
+                    message=f"Failed to add account: {account_result.message}"
+                )
 
-        return graphql_common.Success.from_node(
-            PlanAccount.from_orm(plan_account),
-            is_message_displayable=True,
-            message="Account added successfully.",
-        )
+            try:
+                # Query for PlanAccount
+                # It's ok to use ORM here, following CQRS pattern
+                plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_result.data)
+
+                return graphql_common.Success.from_node(
+                    PlanAccount.from_orm(plan_account),
+                    is_message_displayable=True,
+                    message="Account added successfully.",
+                )
+            except OrmPlanAccount.DoesNotExist:
+                return graphql_common.ApplicationError(message="Failed to retrieve the created account.")
+        except MoneyPlanError as e:
+            logger.error(f"Money plan error adding account: {e}", exc_info=True)
+            return graphql_common.ApplicationError(message=str(e))
+        except Exception as e:
+            logger.error(f"Error adding account: {e}", exc_info=True)
+            return graphql_common.ApplicationError(message=f"An unexpected error occurred: {str(e)}")
 
     @strawberry.mutation
     def commit_plan(self, info: Info, input: CommitPlanInput) -> graphql_common.MutationResponse:
@@ -792,6 +817,11 @@ class MoneyPlanMutations:
                 MoneyPlan.from_domain(plan_result.data),
                 is_message_displayable=True,
                 message="Plan notes updated successfully.",
+            )
+        except OrmMoneyPlan.DoesNotExist:
+            # This happens when a user tries to access a plan that doesn't belong to them
+            return graphql_common.ApplicationError(
+                message="Plan not found or you don't have permission to modify it."
             )
         except (MoneyPlanError, ValueError) as e:
             return graphql_common.ApplicationError(message=str(e))

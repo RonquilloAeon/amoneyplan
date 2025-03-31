@@ -69,7 +69,11 @@ class AuthMutations:
     ) -> AuthResponse:
         try:
             if User.objects.filter(username=username).exists():
-                return AuthResponse(success=False, error=AuthError(message="Username already exists"))
+                return AuthResponse(success=False, error="Username already exists")
+
+            # Add check for email uniqueness
+            if User.objects.filter(email=email).exists():
+                return AuthResponse(success=False, error="Email already exists")
 
             # TODO move to a use case
             user = User.objects.create_user(
@@ -92,7 +96,7 @@ class AuthMutations:
 
             return AuthResponse(success=True, token=generate_token(user))
         except Exception as e:
-            return AuthResponse(success=False, error=AuthError(message=str(e)))
+            return AuthResponse(success=False, error=str(e))
 
     @strawberry.mutation
     def login(
@@ -103,7 +107,7 @@ class AuthMutations:
     ) -> AuthResponse:
         user = authenticate(username=username, password=password)
         if user is None:
-            return AuthResponse(success=False, error=AuthError(message="Invalid credentials"))
+            return AuthResponse(success=False, error="Invalid credentials")
 
         return AuthResponse(success=True, token=generate_token(user))
 
@@ -144,12 +148,10 @@ class AuthMutations:
             if request.user.is_authenticated:
                 return AuthResponse(success=True, user=request.user)
             else:
-                return AuthResponse(success=False, error=AuthError(message="Google authentication failed"))
+                return AuthResponse(success=False, error="Google authentication failed")
 
         except Exception as e:
-            return AuthResponse(
-                success=False, error=AuthError(message=f"Google authentication error: {str(e)}")
-            )
+            return AuthResponse(success=False, error=f"Google authentication error: {str(e)}")
 
 
 @strawberry.type

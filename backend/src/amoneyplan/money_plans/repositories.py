@@ -122,10 +122,13 @@ class MoneyPlanRepository:
 
     def get_by_id(self, plan_id) -> DomainMoneyPlan:
         """
-        Get a money plan by ID and user ID.
+        Get a money plan by ID and user account.
 
         Returns:
             Domain model instance of the money plan
+
+        Raises:
+            MoneyPlan.DoesNotExist: If the plan doesn't exist or doesn't belong to the current user
         """
         orm_plan = MoneyPlan.objects.get(id=plan_id)
         return to_domain_money_plan(orm_plan)
@@ -138,7 +141,12 @@ class MoneyPlanRepository:
             Domain model instance of the current plan or None if no current plan exists
         """
         orm_plan = (
-            MoneyPlan.objects.filter(committed=False, is_archived=False).order_by("-created_at").first()
+            MoneyPlan.objects.filter(
+                committed=False,
+                is_archived=False,
+            )
+            .order_by("-created_at")
+            .first()
         )
 
         if orm_plan:

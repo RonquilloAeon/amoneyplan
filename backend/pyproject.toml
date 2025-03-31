@@ -5,20 +5,26 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry]
 name = "amoneyplan"
 version = "0.1.0"
-description = "A personal money management app using event sourcing"
+description = "A personal money management app"
 readme = "README.md"
-authors = ["Project Author <author@example.com>"]
+authors = ["Martin Ronquillo"]
 packages = [{include = "src"}]
 repository = "https://github.com/RonquilloAeon/amoneyplan"
 
 [tool.poetry.dependencies]
 python = "^3.13"
-eventsourcing-django = "^0.5.1"
 strawberry-graphql = "^0.261.1"
 psycopg = {extras = ["binary", "pool"], version = "^3.2.3"}
 django-cors-headers = "^4.7.0"
 pre-commit = "^4.1.0"
 uvicorn = "^0.34.0"
+django-allauth = "^65.5.0"
+requests = "^2.32.3"
+pyjwt = "^2.10.1"
+cryptography = "^44.0.2"
+cuid2 = "^2.0.1"
+alt-profanity-check = "^1.6.1"
+strawberry-graphql-django = "^0.57.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
@@ -27,6 +33,8 @@ nox = "^2025.2.9"
 pytest-django = "^4.10.0"
 pytest-cov = "^4.1.0"
 mypy = "^1.9.0"
+faker = "^37.1.0"
+pytest-profiling = "^1.8.1"
 
 [tool.pytest.ini_options]
 addopts = "-s"

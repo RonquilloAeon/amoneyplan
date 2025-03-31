@@ -1,9 +1,8 @@
 import pytest
 from django.apps import apps
-from django.conf import settings
 from django.test import Client
 
-from amoneyplan.money_plans.application import MoneyPlanner
+from amoneyplan.money_plans.use_cases import MoneyPlanUseCases
 
 
 @pytest.fixture
@@ -14,7 +13,12 @@ def client():
 
 @pytest.fixture
 def money_planner(transactional_db):
-    """Create a fresh MoneyPlanner instance for each test."""
-    planner = MoneyPlanner(env=settings.EVENT_SOURCING_SETTINGS)
-    apps.get_app_config("money_plans").money_planner = planner
+    """Create a fresh MoneyPlanUseCases instance for each test."""
+    planner = MoneyPlanUseCases()
+    if apps.is_installed("amoneyplan.money_plans"):
+        try:
+            apps.get_app_config("money_plans").money_planner = planner
+        except AttributeError:
+            # App config might not have money_planner attribute in test environment
+            pass
     return planner

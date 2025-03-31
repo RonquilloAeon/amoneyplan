@@ -1,17 +1,17 @@
 """
-Domain app configuration.
+Money Plans app configuration.
 """
 
 from django.apps import AppConfig
-from django.conf import settings
-
-from .application import MoneyPlanner
 
 
-class DomainConfig(AppConfig):
+class MoneyPlansConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "amoneyplan.money_plans"
     verbose_name = "Money Plans"
 
     def ready(self) -> None:
-        self.money_planner = MoneyPlanner(env=settings.EVENT_SOURCING_SETTINGS)
+        # Import here to avoid circular imports
+        from .use_cases import MoneyPlanUseCases
+
+        self.money_planner = MoneyPlanUseCases()

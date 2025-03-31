@@ -6,6 +6,99 @@ from .utils import TestGraphQLAPI
 
 @pytest.mark.django_db(transaction=True)
 class TestAccountSchema(TestGraphQLAPI):
+    def test_accounts_query(self, client, money_planner):
+        """Test querying user's accounts."""
+        # Get a test user
+        user = self.get_test_user(client)
+
+        # First create a plan to work within
+        result = self.execute_query(
+            client,
+            """
+            mutation StartPlan($input: PlanStartInput!) {
+                moneyPlan {
+                    startPlan(input: $input) {
+                        ... on Success {
+                            data
+                        }
+                        ... on ApplicationError {
+                            message
+                        }
+                        ... on UnexpectedError {
+                            message
+                        }
+                    }
+                }
+            }
+            """,
+            user=user,
+            variables={"input": {"initialBalance": 1000.0}},
+        )
+        assert "errors" not in result
+        plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add three accounts to the plan with different names
+        test_account_names = ["Test Account 1", "Test Account 2", "Test Account 3"]
+        for account_name in test_account_names:
+            result = self.execute_query(
+                client,
+                """
+                mutation AddAccount($input: AddAccountInput!) {
+                    moneyPlan {
+                        addAccount(input: $input) {
+                            ... on Success {
+                                data
+                            }
+                            ... on ApplicationError {
+                                message
+                            }
+                            ... on UnexpectedError {
+                                message
+                            }
+                        }
+                    }
+                }
+                """,
+                user=user,
+                variables={
+                    "input": {
+                        "planId": plan_id,
+                        "name": account_name,
+                        "buckets": [
+                            {"bucketName": "Default", "category": "default", "allocatedAmount": 100.0}
+                        ],
+                    }
+                },
+            )
+            assert "errors" not in result
+
+        # Now query the standalone accounts
+        result = self.execute_query(
+            client,
+            """
+            query GetAccounts {
+                accounts {
+                    id
+                    name
+                }
+            }
+            """,
+            user=user,
+        )
+
+        # Verify the query results
+        assert "errors" not in result
+        assert "accounts" in result
+
+        # Check that all accounts are returned
+        returned_accounts = result["accounts"]
+        assert len(returned_accounts) >= len(test_account_names)
+
+        # Check that all our created accounts are in the returned results
+        returned_names = [account["name"] for account in returned_accounts]
+        for name in test_account_names:
+            assert name in returned_names
+
     def test_change_account_configuration(self, client, money_planner):
         """Test changing the bucket configuration for an account."""
         # Get a test user

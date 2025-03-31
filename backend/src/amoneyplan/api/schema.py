@@ -16,6 +16,7 @@ from amoneyplan.domain.money_plan import (
     MoneyPlanError,
     PlanAlreadyCommittedError,
 )
+from amoneyplan.money_plans.models import Account as OrmAccount
 from amoneyplan.money_plans.models import MoneyPlan as OrmMoneyPlan
 from amoneyplan.money_plans.models import PlanAccount as OrmPlanAccount
 from amoneyplan.money_plans.use_cases import MoneyPlanUseCases
@@ -50,6 +51,21 @@ class Bucket(relay.Node):
 
 @strawberry.type
 class Account(relay.Node):
+    """
+    Represents a standalone account entity, not connected to a specific plan.
+    This is used for the accounts query to list available accounts.
+    """
+
+    id: relay.NodeID[str]
+    name: str
+
+
+@strawberry.type
+class PlanAccount(relay.Node):
+    """
+    Represents an account within a money plan which has buckets, checked state, and notes.
+    """
+
     id: relay.NodeID[str]
     name: str
     buckets: List[Bucket]
@@ -57,14 +73,14 @@ class Account(relay.Node):
     notes: str = ""
 
     @classmethod
-    def resolve_node(cls, node_id: str, info: Info) -> Optional["Account"]:
+    def resolve_node(cls, node_id: str, info: Info) -> Optional["PlanAccount"]:
         # In a real implementation, you would parse the node_id and fetch the account
         # For now, we return None as accounts are always loaded through their parent MoneyPlan
         return None
 
     @staticmethod
-    def from_domain(domain_account) -> "Account":
-        account = Account(
+    def from_domain(domain_account) -> "PlanAccount":
+        account = PlanAccount(
             id=domain_account.account_id,
             name=domain_account.name,
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
@@ -74,9 +90,9 @@ class Account(relay.Node):
         return account
 
     @staticmethod
-    def from_orm(orm_plan_account: OrmPlanAccount) -> "Account":
+    def from_orm(orm_plan_account: OrmPlanAccount) -> "PlanAccount":
         """
-        Create an Account instance from an ORM PlanAccount object.
+        Create a PlanAccount instance from an ORM PlanAccount object.
         This method is useful for converting ORM objects to GraphQL types.
         """
         buckets = [
@@ -90,7 +106,7 @@ class Account(relay.Node):
         ]
 
         orm_account = orm_plan_account.account
-        account = Account(
+        account = PlanAccount(
             id=str(orm_account.id),
             name=orm_account.name,
             buckets=buckets,
@@ -106,7 +122,7 @@ class MoneyPlan(relay.Node):
     id: relay.NodeID[str]
     initial_balance: float
     remaining_balance: float
-    accounts: List[Account]
+    accounts: List[PlanAccount]
     notes: str
     is_committed: bool
     is_archived: bool
@@ -133,7 +149,7 @@ class MoneyPlan(relay.Node):
             initial_balance=domain_plan.initial_balance.as_float,
             remaining_balance=domain_plan.remaining_balance.as_float,
             accounts=[
-                Account.from_domain(allocation.account) for allocation in domain_plan.accounts.values()
+                PlanAccount.from_domain(allocation.account) for allocation in domain_plan.accounts.values()
             ],
             notes=domain_plan.notes,
             is_committed=domain_plan.committed,
@@ -151,7 +167,7 @@ class MoneyPlan(relay.Node):
         This method is useful for converting ORM objects to GraphQL types.
         """
         # Get accounts for the plan
-        accounts = [Account.from_orm(plan_account) for plan_account in orm_plan.plan_accounts.all()]
+        accounts = [PlanAccount.from_orm(plan_account) for plan_account in orm_plan.plan_accounts.all()]
 
         # Create the MoneyPlan GraphQL type
         plan = MoneyPlan(
@@ -301,6 +317,27 @@ class EditAccountNotesInput:
 # GraphQL queries
 @strawberry.type
 class Query(AuthQueries):
+    @strawberry.field
+    def accounts(self, info: Info) -> List[Account]:
+        """
+        Get all accounts for the current user. This is useful when adding accounts to a draft plan.
+        """
+        if not info.context.request.user.is_authenticated:
+            return []
+
+        try:
+            accounts = []
+            for orm_account in OrmAccount.objects.all():
+                account = Account(
+                    id=str(orm_account.id),
+                    name=orm_account.name,
+                )
+                accounts.append(account)
+            return accounts
+        except Exception as e:
+            logger.error(f"Error fetching accounts: {e}", exc_info=True)
+            return []
+
     @strawberry.field
     def money_plan(self, info: Info, plan_id: Optional[relay.GlobalID] = None) -> Optional[MoneyPlan]:
         """
@@ -614,9 +651,9 @@ class MoneyPlanMutations:
         plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_result.data)
 
         return graphql_common.Success.from_node(
-            Account.from_orm(plan_account),
+            PlanAccount.from_orm(plan_account),
             is_message_displayable=True,
-            message="Account removed successfully.",
+            message="Account added successfully.",
         )
 
     @strawberry.mutation

@@ -51,7 +51,7 @@ class Success:
     data: JSON
 
     is_message_displayable: bool = False
-    message: str | None = None
+    message: str
 
     @classmethod
     def from_node(
@@ -65,8 +65,10 @@ class Success:
 
         logger.info("Serialized node data for Success response type: %s", data)
 
-        # Use the node's serialized data as the `data` field
-        return cls(data=data, is_message_displayable=is_message_displayable, message=message)
+        if not message:
+            is_message_displayable = False
+
+        return cls(data=data, is_message_displayable=is_message_displayable, message=message or "Ok")
 
 
 @strawberry.type(directives=[Shareable()])

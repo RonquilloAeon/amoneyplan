@@ -75,39 +75,49 @@ class TestGraphQLAPI:
 
     def create_money_plan(self, client: Client, initial_balance: float, notes: str) -> str:
         """Helper method to create a money plan and return its ID."""
+        # Get a test user if one doesn't exist
+        user = self.get_test_user(client)
+
         create_plan_mutation = """
         mutation StartPlan($input: PlanStartInput!) {
             moneyPlan {
                 startPlan(input: $input) {
-                    success
-                    error {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
                         message
                     }
-                    moneyPlan {
-                        id
+                    ...on UnexpectedError {
+                        message
                     }
                 }
             }
         }
         """
         variables = {"input": {"initialBalance": initial_balance, "notes": notes}}
-        result = self.execute_query(client, create_plan_mutation, variables)
-
-        return result["moneyPlan"]["startPlan"]["moneyPlan"]["id"]
+        result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
+        return result["moneyPlan"]["startPlan"]["data"]["id"]
 
     def add_account_with_full_balance(
         self, client: Client, plan_id: str, initial_balance: float, account_name: str
     ) -> str:
         """Helper method to add an account that allocates the full balance."""
+        # Get a test user if one doesn't exist
+        user = self.get_test_user(client)
+
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
                 addAccount(input: $input) {
-                    success
-                    moneyPlan {
-                        accounts {
-                            id
-                        }
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
                     }
                 }
             }
@@ -122,20 +132,31 @@ class TestGraphQLAPI:
                 ],
             }
         }
-        result = self.execute_query(client, add_account_mutation, account_variables)
-        return result["moneyPlan"]["addAccount"]["moneyPlan"]["accounts"][0]["id"]
+        result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
+        return result["moneyPlan"]["addAccount"]["data"]["id"]
 
     def commit_plan(self, client: Client, plan_id: str) -> bool:
         """Helper method to commit a plan and return success status."""
+        # Get a test user if one doesn't exist
+        user = self.get_test_user(client)
+
         commit_mutation = """
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    success
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
                 }
             }
         }
         """
         commit_variables = {"input": {"planId": plan_id}}
-        result = self.execute_query(client, commit_mutation, commit_variables)
-        return result["moneyPlan"]["commitPlan"]["success"]
+        result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
+        return "data" in result["moneyPlan"]["commitPlan"]

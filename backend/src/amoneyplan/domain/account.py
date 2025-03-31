@@ -39,7 +39,7 @@ class Account:
     @classmethod
     def create(cls, account_id: str, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
         """
-        Factory method to create a new account with a generated UUID.
+        Factory method to create a new account with a generated ID.
         If no buckets are provided or added during creation, creates a default bucket.
 
         Args:

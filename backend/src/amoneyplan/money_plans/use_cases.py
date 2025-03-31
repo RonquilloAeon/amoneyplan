@@ -1,15 +1,13 @@
 import logging
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, List, Optional, TypeVar, Union
+from typing import List, Optional, TypeVar, Union
 
 from django.db import transaction
 
 from amoneyplan.common.models import generate_safe_cuid16
 from amoneyplan.common.use_cases import UseCaseResult
 from amoneyplan.domain.money import Money
-
-if TYPE_CHECKING:
-    from amoneyplan.domain.money_plan import MoneyPlan as DomainMoneyPlan
+from amoneyplan.domain.money_plan import MoneyPlan as DomainMoneyPlan
 
 from .models import MoneyPlan
 from .repositories import (
@@ -90,9 +88,6 @@ class MoneyPlanUseCases:
 
     def _get_current_plan_id(self) -> Optional[str]:
         """Get the current uncommitted plan ID by checking the most recent plans."""
-        if not self.user_id:
-            return None
-
         # Look for the most recent plan
         current_plan = self.money_plan_repo.get_current_plan()
         if current_plan:
@@ -283,12 +278,13 @@ class MoneyPlanUseCases:
     ) -> UseCaseResult[None]:
         """
         Allocate funds to a bucket within an account.
+        The amount can be positive (to add funds) or negative (to remove funds).
 
         Args:
             plan_id: The ID of the plan
             account_id: The ID of the account
             bucket_name: The name of the bucket
-            amount: The amount to allocate
+            amount: The amount to allocate (positive) or deallocate (negative)
 
         Returns:
             UseCaseResult indicating success or failure
@@ -312,54 +308,6 @@ class MoneyPlanUseCases:
             return UseCaseResult.failure(error=e)
         except Exception as e:
             logger.error(f"Error allocating funds: {e}", exc_info=True)
-            return UseCaseResult.failure(error=e)
-
-    @transaction.atomic
-    def reverse_allocation(
-        self,
-        plan_id: str,
-        account_id: str,
-        bucket_name: str,
-        original_amount: Union[Money, float, str],
-        corrected_amount: Union[Money, float, str],
-    ) -> UseCaseResult[None]:
-        """
-        Reverse an allocation and apply a corrected amount.
-
-        Args:
-            plan_id: The ID of the plan
-            account_id: The ID of the account
-            bucket_name: The name of the bucket
-            original_amount: The original amount that was allocated
-            corrected_amount: The corrected amount to allocate
-
-        Returns:
-            UseCaseResult indicating success or failure
-        """
-        try:
-            # Get the domain model from repository
-            plan_result = self.get_plan(plan_id)
-            if not plan_result.success:
-                return UseCaseResult.failure(error=plan_result.error)
-
-            plan = plan_result.data
-
-            # Use the domain model's reverse_allocation method
-            plan.reverse_allocation(
-                account_id=account_id,
-                bucket_name=bucket_name,
-                original_amount=original_amount,
-                corrected_amount=corrected_amount,
-            )
-
-            # Save the updated domain model through the repository
-            self.money_plan_repo.save(plan)
-
-            return UseCaseResult.success()
-        except MoneyPlanError as e:
-            return UseCaseResult.failure(error=e)
-        except Exception as e:
-            logger.error(f"Error reversing allocation: {e}", exc_info=True)
             return UseCaseResult.failure(error=e)
 
     @transaction.atomic
@@ -616,6 +564,7 @@ class MoneyPlanUseCases:
         source_plan_id: str,
         initial_balance: Union[Money, float, str],
         notes: str = "",
+        plan_date: Optional[date] = None,
     ) -> UseCaseResult[str]:
         """
         Create a new plan with the account structure copied from an existing plan.
@@ -657,7 +606,7 @@ class MoneyPlanUseCases:
                 source_plan=source_plan,
                 initial_balance=initial_balance,
                 created_at=datetime.now(timezone.utc),
-                plan_date=date.today(),
+                plan_date=plan_date or date.today(),
                 notes=notes,
             )
 

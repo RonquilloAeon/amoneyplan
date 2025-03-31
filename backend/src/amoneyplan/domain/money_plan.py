@@ -1,7 +1,4 @@
-"""
-Money Plan aggregate root for the personal money management app.
-"""
-
+# ruff: noqa: E501
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Dict, List, Optional, Union
@@ -91,8 +88,8 @@ class MoneyPlan:
         cls,
         id: str,
         initial_balance: Union[Money, float, str],
-        created_at: Optional[datetime] = None,
-        plan_date: Optional[date] = None,
+        created_at: datetime = None,
+        plan_date: date = None,
         default_allocations: Optional[List[AccountAllocationConfig]] = None,
         notes: str = "",
     ):
@@ -139,110 +136,114 @@ class MoneyPlan:
             notes=notes,
         )
 
+    @classmethod
+    def copy_structure(
+        cls,
+        id: str,
+        source_plan,
+        initial_balance: Union[Money, float, str],
+        created_at: datetime = None,
+        plan_date: date = None,
+        notes: str = "",
+    ):
+        """
+        Create a new plan with the account structure copied from an existing plan.
+        All allocations in the new plan will be set to zero.
+
+        Args:
+            id: The ID for the new plan
+            source_plan: The plan to copy structure from
+            initial_balance: The initial balance for the new plan
+            created_at: Optional creation timestamp
+            plan_date: Optional plan date
+            notes: Optional notes for the new plan
+
+        Returns:
+            A new MoneyPlan instance with the same account and bucket structure
+        """
+        if isinstance(initial_balance, (float, str)):
+            initial_balance = Money(initial_balance)
+
+        accounts = {}
+        # Copy each account from the source plan
+        for account_id, allocation in source_plan.accounts.items():
+            source_account = allocation.account
+            # Create a new account with the same name but empty allocations
+            new_account = Account(account_id=account_id, name=source_account.name)
+
+            # Copy bucket structure with zero allocations
+            for bucket_name, bucket in source_account.buckets.items():
+                new_bucket = Bucket(
+                    bucket_name=bucket.bucket_name, category=bucket.category, allocated_amount=Money(0)
+                )
+                new_account.buckets[bucket_name] = new_bucket
+
+            # Add account to the new plan
+            accounts[account_id] = PlanAccountAllocation(account=new_account)
+
+        return cls(
+            id=id,
+            initial_balance=initial_balance,
+            remaining_balance=initial_balance,  # All allocations start at 0
+            created_at=created_at,
+            plan_date=plan_date,
+            accounts=accounts,
+            notes=notes,
+        )
+
     def allocate_funds(self, account_id: str, bucket_name: str, amount: Union[Money, float, str]):
         """
-        Allocate funds to a bucket within an account.
+        Allocate or deallocate funds to/from a bucket within an account.
 
         Args:
             account_id: The ID of the account to allocate to
             bucket_name: The name of the bucket to allocate to
-            amount: The amount to allocate
+            amount: The amount to allocate (positive) or deallocate (negative)
 
         Raises:
             PlanAlreadyCommittedError: If the plan is already committed
             AccountNotFoundError: If the account ID doesn't exist
             BucketNotFoundError: If the bucket doesn't exist in the account
-            InsufficientFundsError: If there aren't enough funds to allocate
+            InsufficientFundsError: If there aren't enough funds to allocate (for positive amounts)
+            InsufficientFundsError: If the bucket doesn't have enough funds to deallocate (for negative amounts)
         """
         self._check_not_archived()
-
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot allocate funds to a committed plan")
 
         if isinstance(amount, (float, str)):
             amount = Money(amount)
 
-        # Check if we have enough remaining funds
-        if amount > self.remaining_balance:
+        # Find the account
+        if account_id not in self.accounts:
+            raise AccountNotFoundError(f"Account with ID {account_id} not found")
+
+        account_allocation = self.accounts[account_id]
+        account = account_allocation.account
+
+        # Find the bucket
+        bucket = account.get_bucket(bucket_name)
+        if not bucket:
+            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.name}'")
+
+        # For positive amounts (allocating funds), check if we have enough funds
+        if amount > Money(0) and amount > self.remaining_balance:
             raise InsufficientFundsError(
                 f"Not enough funds to allocate {amount}. Remaining: {self.remaining_balance}"
             )
 
-        # Find the account
-        if account_id not in self.accounts:
-            raise AccountNotFoundError(f"Account with ID {account_id} not found")
-
-        account_allocation = self.accounts[account_id]
-        account = account_allocation.account
-
-        # Find the bucket
-        bucket = account.get_bucket(bucket_name)
-        if not bucket:
-            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.name}'")
+        # For negative amounts (deallocating funds), check if the bucket has enough funds
+        if amount < Money(0) and abs(amount) > bucket.allocated_amount:
+            raise InsufficientFundsError(
+                f"Not enough funds in bucket to deallocate {abs(amount)}. "
+                f"Current allocation: {bucket.allocated_amount}"
+            )
 
         # Update the bucket's allocation
         bucket.allocated_amount += amount
 
-        # Reduce the remaining balance
+        # Update the remaining balance
         self.remaining_balance -= amount
-
-    def reverse_allocation(
-        self,
-        account_id: str,
-        bucket_name: str,
-        original_amount: Union[Money, float, str],
-        corrected_amount: Union[Money, float, str],
-    ):
-        """
-        Reverse a previous allocation and apply a corrected amount.
-
-        Args:
-            account_id: The ID of the account containing the bucket
-            bucket_name: The name of the bucket to adjust
-            original_amount: The original amount that was allocated (to be reversed)
-            corrected_amount: The new amount to allocate
-
-        Raises:
-            PlanAlreadyCommittedError: If the plan is already committed
-            AccountNotFoundError: If the account ID doesn't exist
-            BucketNotFoundError: If the bucket doesn't exist in the account
-            InsufficientFundsError: If there aren't enough funds for the new allocation
-        """
-        self._check_not_archived()
-
-        if self.committed:
-            raise PlanAlreadyCommittedError("Cannot adjust allocations in a committed plan")
-
-        if isinstance(original_amount, (float, str)):
-            original_amount = Money(original_amount)
-
-        if isinstance(corrected_amount, (float, str)):
-            corrected_amount = Money(corrected_amount)
-
-        # Find the account
-        if account_id not in self.accounts:
-            raise AccountNotFoundError(f"Account with ID {account_id} not found")
-
-        account_allocation = self.accounts[account_id]
-        account = account_allocation.account
-
-        # Find the bucket
-        bucket = account.get_bucket(bucket_name)
-        if not bucket:
-            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.name}'")
-
-        # Calculate the net adjustment
-        net_adjustment = corrected_amount - original_amount
-
-        # Check if we have enough funds for the adjustment
-        if net_adjustment > self.remaining_balance:
-            raise InsufficientFundsError(
-                f"Not enough funds for adjustment of {net_adjustment}. Remaining: {self.remaining_balance}"
-            )
-
-        # Update the bucket and remaining balance
-        bucket.allocated_amount += net_adjustment
-        self.remaining_balance -= net_adjustment
 
     def adjust_plan_balance(self, adjustment: Union[Money, float, str], reason: str = ""):
         """

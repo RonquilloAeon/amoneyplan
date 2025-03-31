@@ -5,6 +5,7 @@ from typing import List, Optional
 import strawberry
 from strawberry import relay
 from strawberry.types import Info
+from strawberry_django.optimizer import DjangoOptimizerExtension
 
 from amoneyplan.accounts.schema import AuthMutations, AuthQueries
 from amoneyplan.common import graphql as graphql_common
@@ -15,6 +16,7 @@ from amoneyplan.domain.money_plan import (
     MoneyPlanError,
     PlanAlreadyCommittedError,
 )
+from amoneyplan.money_plans.models import MoneyPlan as OrmMoneyPlan
 from amoneyplan.money_plans.models import PlanAccount as OrmPlanAccount
 from amoneyplan.money_plans.use_cases import MoneyPlanUseCases
 
@@ -142,6 +144,30 @@ class MoneyPlan(relay.Node):
         )
         return plan
 
+    @staticmethod
+    def from_orm(orm_plan) -> "MoneyPlan":
+        """
+        Create a MoneyPlan instance from an ORM MoneyPlan object.
+        This method is useful for converting ORM objects to GraphQL types.
+        """
+        # Get accounts for the plan
+        accounts = [Account.from_orm(plan_account) for plan_account in orm_plan.plan_accounts.all()]
+
+        # Create the MoneyPlan GraphQL type
+        plan = MoneyPlan(
+            id=str(orm_plan.id),
+            initial_balance=float(orm_plan.initial_balance),
+            remaining_balance=float(orm_plan.remaining_balance),
+            accounts=accounts,
+            notes=orm_plan.notes,
+            is_committed=orm_plan.committed,
+            is_archived=orm_plan.is_archived,
+            created_at=orm_plan.created_at.isoformat() if orm_plan.created_at else None,
+            plan_date=orm_plan.plan_date.isoformat() if orm_plan.plan_date else None,
+            archived_at=orm_plan.archived_at.isoformat() if orm_plan.archived_at else None,
+        )
+        return plan
+
 
 @strawberry.type
 class MoneyPlanConnection(relay.Connection[MoneyPlan]):
@@ -205,15 +231,6 @@ class AllocateFundsInput:
     account_id: str
     bucket_name: str
     amount: float
-
-
-@strawberry.input
-class ReverseAllocationInput:
-    plan_id: relay.GlobalID
-    account_id: relay.GlobalID
-    bucket_name: str
-    original_amount: float
-    corrected_amount: float
 
 
 @strawberry.input
@@ -327,53 +344,45 @@ class Query(AuthQueries):
                 ),
             )
         try:
-            use_case = MoneyPlanUseCases()
-
-            # Convert cursor strings to notification positions
-            after_pos = None if after is None else int(strawberry.relay.from_base64(after)[1])
-            before_pos = None if before is None else int(strawberry.relay.from_base64(before)[1])
-
-            # Use descending order by default, switch to ascending only if using 'last'
-            desc = not bool(last)
-
-            # When displaying in descending order (most recent first), we need to adjust our gt/lte logic
-            if desc:
-                # When desc=True, swap gt/lte logic
-                gt_pos = None
-                lte_pos = after_pos - 1 if after_pos is not None else before_pos
-            else:
-                # When desc=False (using last), use normal gt/lte logic
-                gt_pos = after_pos
-                lte_pos = before_pos
-
-            plans_with_pos = list(use_case.get_plans(gt=gt_pos, lte=lte_pos, desc=desc, limit=first or last))
-
-            # Apply filters if provided
+            # Start with all plans for the current user
+            queryset = OrmMoneyPlan.objects.all()
+            # Apply filters
             if filter:
-                if filter.is_archived:
-                    # When is_archived is true, show only archived plans
-                    plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if plan.is_archived]
-                else:
-                    # When is_archived is false, show only non-archived plans
-                    plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.is_archived]
+                queryset = queryset.filter(is_archived=filter.is_archived)
 
-                # Filter by status if specified
                 if filter.status:
                     if filter.status == "draft":
-                        plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.committed]
+                        queryset = queryset.filter(committed=False)
                     elif filter.status == "committed":
-                        plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if plan.committed]
-                    # 'all' requires no filtering
+                        queryset = queryset.filter(committed=True)
             else:
-                # Default behavior when no filter is provided: show only non-archived plans
-                plans_with_pos = [(pos, plan) for pos, plan in plans_with_pos if not plan.is_archived]
-
-            # If using 'last', we need to reverse the results since we got them in ascending order
+                # Default behavior: show non-archived plans
+                queryset = queryset.filter(is_archived=False)
+            # Order by most recent first by default
+            queryset = queryset.order_by("-created_at")
+            # Convert cursor strings to created_at timestamps if provided
+            after_ts = None if after is None else strawberry.relay.from_base64(after)[1]
+            before_ts = None if before is None else strawberry.relay.from_base64(before)[1]
+            # Apply cursor-based pagination
+            if after_ts is not None:
+                # Parse the timestamp and filter
+                queryset = queryset.filter(created_at__lt=after_ts)
+            if before_ts is not None:
+                # Parse the timestamp and filter
+                queryset = queryset.filter(created_at__gt=before_ts)
+            # Reverse order and limits for 'last' pagination
             if last:
-                plans_with_pos.reverse()
-
+                queryset = queryset.order_by("created_at")
+                queryset = queryset[:last]
+                plans = list(queryset)
+                plans.reverse()  # Reverse back to descending order
+            else:
+                # Apply first limit if specified
+                if first:
+                    queryset = queryset[:first]
+                plans = list(queryset)
             # No plans found
-            if not plans_with_pos:
+            if not plans:
                 return MoneyPlanConnection(
                     edges=[],
                     page_info=relay.PageInfo(
@@ -383,56 +392,37 @@ class Query(AuthQueries):
                         end_cursor=None,
                     ),
                 )
-
-            # Create edges with cursors based on notification positions
-            edges = [
-                strawberry.relay.Edge(
-                    node=MoneyPlan.from_domain(plan), cursor=strawberry.relay.to_base64("MoneyPlan", str(pos))
+            # Create edges with cursors based on created_at timestamps
+            edges = []
+            for plan in plans:
+                # Convert ORM plan to GraphQL type
+                edges.append(
+                    strawberry.relay.Edge(
+                        node=MoneyPlan.from_orm(plan),
+                        cursor=strawberry.relay.to_base64("MoneyPlan", str(plan.created_at)),
+                    )
                 )
-                for pos, plan in plans_with_pos
-            ]
-
-            # The key insight for pagination is that positions increase as plans are created.
-            # But we want to show most recent first, so we display them in reverse order.
-            #
-            # Therefore:
-            # - For 'first': next page means lower positions, previous page means higher positions
-            # - For 'last': next page means higher positions, previous page means lower positions
-            min_pos = min(pos for pos, _ in plans_with_pos)
-            max_pos = max(pos for pos, _ in plans_with_pos)
-
+            # Calculate has_next_page and has_previous_page
             if first:
-                # When paginating forward with 'first':
-                has_next = bool(
-                    list(
-                        use_case.get_plans(
-                            lte=min_pos - 1,  # Look for records with lower positions
-                            limit=1,
-                            desc=desc,
-                        )
-                    )
-                )
-                has_previous = after_pos is not None  # If we used 'after', there must be previous pages
+                # Check if there are more plans with older timestamps
+                min_date = min(p.created_at for p in plans)
+                has_next = OrmMoneyPlan.objects.filter(
+                    is_archived=filter.is_archived if filter else False, created_at__lt=min_date
+                ).exists()
+                has_previous = after_ts is not None
             else:  # last
-                # When paginating backward with 'last':
-                has_next = bool(
-                    list(
-                        use_case.get_plans(
-                            gt=max_pos,  # Look for records with higher positions
-                            limit=1,
-                            desc=desc,
-                        )
-                    )
-                )
-                has_previous = before_pos is not None  # If we used 'before', there must be previous pages
-
+                # Check if there are more plans with newer timestamps
+                max_date = max(p.created_at for p in plans)
+                has_previous = OrmMoneyPlan.objects.filter(
+                    is_archived=filter.is_archived if filter else False, created_at__gt=max_date
+                ).exists()
+                has_next = before_ts is not None
             page_info = relay.PageInfo(
                 has_next_page=has_next,
                 has_previous_page=has_previous,
                 start_cursor=edges[0].cursor if edges else None,
                 end_cursor=edges[-1].cursor if edges else None,
             )
-
             return MoneyPlanConnection(edges=edges, page_info=page_info)
         except Exception as e:
             logger.error(f"Error fetching money plans: {e}", exc_info=True)
@@ -465,6 +455,7 @@ class MoneyPlanMutations:
                     source_plan_id=input.copy_from.node_id,
                     initial_balance=input.initial_balance,
                     notes=input.notes,
+                    plan_date=input.plan_date,
                 )
                 if not plan_result.success:
                     return graphql_common.ApplicationError(message=plan_result.message)
@@ -501,7 +492,7 @@ class MoneyPlanMutations:
             return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def allocate_funds(self, info: Info, input: AllocateFundsInput) -> PlanResult:
+    def allocate_funds(self, info: Info, input: AllocateFundsInput) -> graphql_common.MutationResponse:
         """
         Allocate funds to a bucket within an account.
         """
@@ -516,45 +507,24 @@ class MoneyPlanMutations:
             )
 
             if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
+                return graphql_common.ApplicationError(message=result.message)
 
             plan_result = use_case.get_plan(input.plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
-        except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
-
-    @strawberry.mutation
-    def reverse_allocation(self, info: Info, input: ReverseAllocationInput) -> PlanResult:
-        """
-        Reverse a previous allocation and apply a corrected amount.
-        """
-        use_case = MoneyPlanUseCases()
-
-        try:
-            result = use_case.reverse_allocation(
-                plan_id=input.plan_id.node_id,
-                account_id=input.account_id.node_id,
-                bucket_name=input.bucket_name,
-                original_amount=input.original_amount,
-                corrected_amount=input.corrected_amount,
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Funds allocated successfully.",
             )
-
-            if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
-
-            plan_result = use_case.get_plan(input.plan_id.node_id)
-            if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
-
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def adjust_plan_balance(self, info: Info, input: PlanBalanceAdjustInput) -> PlanResult:
+    def adjust_plan_balance(
+        self, info: Info, input: PlanBalanceAdjustInput
+    ) -> graphql_common.MutationResponse:
         """
         Adjust the overall plan balance.
         """
@@ -567,18 +537,24 @@ class MoneyPlanMutations:
             )
 
             if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
+                return graphql_common.ApplicationError(message=result.message)
 
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Plan balance adjusted successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def change_account_configuration(self, info: Info, input: AccountConfigurationChangeInput) -> PlanResult:
+    def change_account_configuration(
+        self, info: Info, input: AccountConfigurationChangeInput
+    ) -> graphql_common.MutationResponse:
         """
         Change the bucket configuration for an account.
         """
@@ -595,15 +571,19 @@ class MoneyPlanMutations:
             )
 
             if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
+                return graphql_common.ApplicationError(message=result.message)
 
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Account configuration updated successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
     def add_account(self, info: Info, input: AddAccountInput) -> graphql_common.MutationResponse:
@@ -636,7 +616,7 @@ class MoneyPlanMutations:
         return graphql_common.Success.from_node(
             Account.from_orm(plan_account),
             is_message_displayable=True,
-            message=f"Account '{input.name}' added successfully to your money plan.",
+            message="Account removed successfully.",
         )
 
     @strawberry.mutation
@@ -670,7 +650,7 @@ class MoneyPlanMutations:
         )
 
     @strawberry.mutation
-    def archive_plan(self, info: Info, input: ArchivePlanInput) -> PlanResult:
+    def archive_plan(self, info: Info, input: ArchivePlanInput) -> graphql_common.MutationResponse:
         """Archive a money plan to prevent further modifications."""
         try:
             use_case = MoneyPlanUseCases()
@@ -678,20 +658,24 @@ class MoneyPlanMutations:
 
             archive_result = use_case.archive_plan(plan_id)
             if not archive_result.success:
-                return PlanResult(error=Error(message=archive_result.message), success=False)
+                return graphql_common.ApplicationError(message=archive_result.message)
 
             # Get updated plan state
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Money plan archived successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
             logger.error("Error archiving plan: %s", str(e), exc_info=True)
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def remove_account(self, info: Info, input: RemoveAccountInput) -> PlanResult:
+    def remove_account(self, info: Info, input: RemoveAccountInput) -> graphql_common.MutationResponse:
         """Remove an account from a Money Plan."""
         use_case = MoneyPlanUseCases()
 
@@ -703,19 +687,25 @@ class MoneyPlanMutations:
             )
 
             if not remove_result.success:
-                return PlanResult(error=Error(message=remove_result.message), success=False)
+                return graphql_common.ApplicationError(message=remove_result.message)
 
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Account removed successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error removing account: {e}", exc_info=True)
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def set_account_checked_state(self, info: Info, input: SetAccountCheckedStateInput) -> PlanResult:
+    def set_account_checked_state(
+        self, info: Info, input: SetAccountCheckedStateInput
+    ) -> graphql_common.MutationResponse:
         """Set the checked state of an account."""
         use_case = MoneyPlanUseCases()
 
@@ -728,19 +718,23 @@ class MoneyPlanMutations:
             )
 
             if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
+                return graphql_common.ApplicationError(message=result.message)
 
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Account checked state updated successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error setting account checked state: {e}", exc_info=True)
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def edit_plan_notes(self, info: Info, input: EditPlanNotesInput) -> PlanResult:
+    def edit_plan_notes(self, info: Info, input: EditPlanNotesInput) -> graphql_common.MutationResponse:
         """
         Edit the notes of a plan.
         """
@@ -751,18 +745,22 @@ class MoneyPlanMutations:
             result = use_case.edit_plan_notes(plan_id=plan_id, notes=input.notes)
 
             if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
+                return graphql_common.ApplicationError(message=result.message)
 
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Plan notes updated successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
-    def edit_account_notes(self, info: Info, input: EditAccountNotesInput) -> PlanResult:
+    def edit_account_notes(self, info: Info, input: EditAccountNotesInput) -> graphql_common.MutationResponse:
         """
         Edit the notes of an account.
         """
@@ -777,15 +775,19 @@ class MoneyPlanMutations:
             )
 
             if not result.success:
-                return PlanResult(error=Error(message=result.message), success=False)
+                return graphql_common.ApplicationError(message=result.message)
 
             plan_result = use_case.get_plan(plan_id)
             if not plan_result.success:
-                return PlanResult(error=Error(message=plan_result.message), success=False)
+                return graphql_common.ApplicationError(message=plan_result.message)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(plan_result.data),
+                is_message_displayable=True,
+                message="Account notes updated successfully.",
+            )
         except (MoneyPlanError, ValueError) as e:
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
 
 @strawberry.type
@@ -799,4 +801,4 @@ class Mutation:
         return AuthMutations()
 
 
-schema = strawberry.federation.Schema(query=Query, mutation=Mutation)
+schema = strawberry.federation.Schema(query=Query, mutation=Mutation, extensions=[DjangoOptimizerExtension])

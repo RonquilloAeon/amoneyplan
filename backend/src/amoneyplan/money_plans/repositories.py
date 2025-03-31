@@ -1,14 +1,9 @@
-"""
-Repository classes for the Money Plan app.
-"""
-
-import uuid
 from datetime import date
-from typing import Iterator, List, Optional, Tuple
+from typing import List, Optional
 
 from django.db import transaction
-from django.db.models import QuerySet
 
+from amoneyplan.accounts.tenancy import get_current_account
 from amoneyplan.domain.account import Account as DomainAccount
 from amoneyplan.domain.account import Bucket as DomainBucket
 from amoneyplan.domain.account import PlanAccountAllocation
@@ -59,197 +54,237 @@ def to_domain_money_plan(plan: MoneyPlan) -> DomainMoneyPlan:
     This adapter function maintains compatibility with the existing GraphQL schema
     that expects a MoneyPlan object with the eventsourcing structure.
     """
-    # Create a domain money plan with initial properties
-    domain_plan = DomainMoneyPlan.__new__(DomainMoneyPlan)
-    domain_plan._id = plan.id
-    domain_plan.initial_balance = Money(plan.initial_balance)
-    domain_plan.remaining_balance = Money(plan.remaining_balance)
-    domain_plan.notes = plan.notes
-    domain_plan.committed = plan.committed
-    domain_plan.is_archived = plan.is_archived
-    domain_plan.created_at = plan.created_at
-    domain_plan.plan_date = plan.plan_date
-    domain_plan.archived_at = plan.archived_at
 
     # Convert accounts and buckets
-    domain_plan.accounts = {}
+    accounts = {}
 
     for plan_account in plan.plan_accounts.all().select_related("account").prefetch_related("buckets"):
         account_id = plan_account.account.id
-        domain_plan.accounts[account_id] = to_domain_plan_account_allocation(plan_account)
+        accounts[account_id] = to_domain_plan_account_allocation(plan_account)
 
-    return domain_plan
+    return DomainMoneyPlan(
+        id=plan.id,
+        initial_balance=Money(plan.initial_balance),
+        remaining_balance=Money(plan.remaining_balance),
+        notes=plan.notes,
+        committed=plan.committed,
+        is_archived=plan.is_archived,
+        created_at=plan.created_at,
+        plan_date=plan.plan_date,
+        archived_at=plan.archived_at,
+        accounts=accounts,
+    )
+
+
+def from_domain_money_plan(domain_plan: DomainMoneyPlan, orm_plan: Optional[MoneyPlan] = None) -> MoneyPlan:
+    """
+    Convert a domain MoneyPlan object to a Django MoneyPlan model.
+    If an existing ORM plan is provided, it will be updated.
+
+    Args:
+        domain_plan: The domain money plan to convert
+        orm_plan: Optional existing ORM plan to update
+
+    Returns:
+        Updated or new Django MoneyPlan model
+    """
+    if orm_plan is None:
+        # Create new model
+        orm_plan = MoneyPlan(
+            id=domain_plan.id,
+            user_account=get_current_account(),
+            initial_balance=domain_plan.initial_balance.as_decimal,
+            remaining_balance=domain_plan.remaining_balance.as_decimal,
+            notes=domain_plan.notes,
+            plan_date=domain_plan.plan_date,
+            committed=domain_plan.committed,
+            is_archived=domain_plan.is_archived,
+            created_at=domain_plan.created_at,
+            archived_at=domain_plan.archived_at,
+        )
+    else:
+        # Update existing model
+        orm_plan.initial_balance = domain_plan.initial_balance.as_decimal
+        orm_plan.remaining_balance = domain_plan.remaining_balance.as_decimal
+        orm_plan.notes = domain_plan.notes
+        orm_plan.committed = domain_plan.committed
+        orm_plan.is_archived = domain_plan.is_archived
+        orm_plan.archived_at = domain_plan.archived_at
+
+    return orm_plan
 
 
 class MoneyPlanRepository:
     """Repository for MoneyPlan entity."""
 
-    def get_by_id(self, plan_id: uuid.UUID, user_id: str) -> MoneyPlan:
-        """Get a money plan by ID and user ID."""
-        return MoneyPlan.objects.get(id=plan_id, owner_id=user_id)
+    def __init__(self):
+        self._user_account = get_current_account()
 
-    def get_current_plan(self, user_id: str) -> Optional[MoneyPlan]:
-        """Get the current uncommitted and not archived plan for a user."""
-        return (
-            MoneyPlan.objects.filter(owner_id=user_id, committed=False, is_archived=False)
-            .order_by("-created_at")
-            .first()
+    def get_by_id(self, plan_id) -> DomainMoneyPlan:
+        """
+        Get a money plan by ID and user ID.
+
+        Returns:
+            Domain model instance of the money plan
+        """
+        orm_plan = MoneyPlan.objects.get(id=plan_id)
+        return to_domain_money_plan(orm_plan)
+
+    def get_current_plan(self) -> Optional[DomainMoneyPlan]:
+        """
+        Get the current uncommitted and not archived plan for a user.
+
+        Returns:
+            Domain model instance of the current plan or None if no current plan exists
+        """
+        orm_plan = (
+            MoneyPlan.objects.filter(committed=False, is_archived=False).order_by("-created_at").first()
         )
 
+        if orm_plan:
+            return to_domain_money_plan(orm_plan)
+        return None
+
     @transaction.atomic
-    def save(self, money_plan: MoneyPlan) -> None:
-        """Save a money plan."""
-        money_plan.save()
+    def save(self, money_plan: DomainMoneyPlan) -> None:
+        """
+        Save a domain money plan to the database.
+
+        Args:
+            money_plan: Domain money plan object to save
+        """
+        # Find or create the Django model instance
+        try:
+            orm_plan = MoneyPlan.objects.get(id=money_plan.id)
+        except MoneyPlan.DoesNotExist:
+            orm_plan = None
+
+        # Convert domain model to ORM model
+        orm_plan = from_domain_money_plan(money_plan, orm_plan)
+
+        # Save the model
+        orm_plan.save()
+
+        # Update accounts and buckets
+        self._sync_accounts_and_buckets(money_plan, orm_plan)
+
+    def _sync_accounts_and_buckets(self, domain_plan: DomainMoneyPlan, orm_plan: MoneyPlan) -> None:
+        """
+        Synchronize accounts and buckets between domain model and ORM model.
+        This handles creating, updating, and deleting accounts and buckets
+        based on the domain model state.
+
+        Args:
+            domain_plan: The domain money plan
+            orm_plan: The ORM money plan
+        """
+        # Get existing plan accounts from ORM
+        existing_plan_accounts = {
+            str(pa.account.id): pa for pa in orm_plan.plan_accounts.all().select_related("account")
+        }
+
+        # Process accounts in domain model
+        for account_id, allocation in domain_plan.accounts.items():
+            domain_account = allocation.account
+
+            # Find or create account and plan_account
+            if account_id in existing_plan_accounts:
+                # Update existing plan account
+                plan_account = existing_plan_accounts[account_id]
+                plan_account.is_checked = domain_account.is_checked
+                plan_account.notes = domain_account.notes
+                plan_account.save()
+            else:
+                # Create account if needed
+                try:
+                    account = Account.objects.get(id=domain_account.account_id)
+                except Account.DoesNotExist:
+                    account = Account(
+                        id=domain_account.account_id,
+                        name=domain_account.name,
+                        user_account=self._user_account,
+                    )
+                    account.save()
+
+                # Create plan account
+                plan_account = PlanAccount(
+                    plan=orm_plan,
+                    account=account,
+                    user_account=self._user_account,
+                    is_checked=domain_account.is_checked,
+                    notes=domain_account.notes,
+                )
+                plan_account.save()
+
+            # Process buckets for this account
+            self._sync_buckets(domain_account, plan_account)
+
+        # Remove plan accounts that are no longer in the domain model
+        domain_account_ids = set(domain_plan.accounts.keys())
+        for account_id, plan_account in existing_plan_accounts.items():
+            if account_id not in domain_account_ids:
+                plan_account.delete()  # This will cascade and delete associated buckets
+
+    def _sync_buckets(self, domain_account: DomainAccount, plan_account: PlanAccount) -> None:
+        """
+        Synchronize buckets between a domain account and ORM plan account.
+
+        Args:
+            domain_account: The domain account
+            plan_account: The ORM plan account
+        """
+        # Get existing buckets from ORM
+        existing_buckets = {bucket.name: bucket for bucket in plan_account.buckets.all()}
+
+        # Process buckets in domain account
+        for bucket_name, domain_bucket in domain_account.buckets.items():
+            if bucket_name in existing_buckets:
+                # Update existing bucket
+                bucket = existing_buckets[bucket_name]
+                bucket.category = domain_bucket.category
+                bucket.allocated_amount = domain_bucket.allocated_amount.as_decimal
+                bucket.save()
+            else:
+                # Create new bucket
+                bucket = Bucket(
+                    plan_account=plan_account,
+                    user_account=self._user_account,
+                    name=domain_bucket.bucket_name,
+                    category=domain_bucket.category,
+                    allocated_amount=domain_bucket.allocated_amount.as_decimal,
+                )
+                bucket.save()
+
+        # Remove buckets that are no longer in the domain account
+        domain_bucket_names = set(domain_account.buckets.keys())
+        for bucket_name, bucket in existing_buckets.items():
+            if bucket_name not in domain_bucket_names:
+                bucket.delete()
 
     @transaction.atomic
     def create(
-        self, initial_balance: float, owner_id: str, notes: str = "", plan_date: Optional[date] = None
-    ) -> MoneyPlan:
-        """Create a new money plan."""
-        plan = MoneyPlan(
-            id=uuid.uuid4(),
+        self, initial_balance: float, notes: str = "", plan_date: Optional[date] = None
+    ) -> DomainMoneyPlan:
+        """
+        Create a new money plan domain model and persist it to database.
+
+        Args:
+            initial_balance: Initial balance for the plan
+            notes: Optional notes
+            plan_date: Optional plan date
+
+        Returns:
+            The created domain money plan
+        """
+        # Create ORM model first
+        orm_plan = MoneyPlan(
+            user_account=self._user_account,
             initial_balance=initial_balance,
             remaining_balance=initial_balance,
             notes=notes,
             plan_date=plan_date or date.today(),
-            owner_id=owner_id,
         )
-        plan.save()
-        return plan
+        orm_plan.save()
 
-    def list_plans(
-        self, user_id: str, is_archived: bool = False, limit: Optional[int] = None, desc: bool = True
-    ) -> QuerySet:
-        """List money plans for a user."""
-        query = MoneyPlan.objects.filter(owner_id=user_id, is_archived=is_archived)
-        if desc:
-            query = query.order_by("-created_at")
-        else:
-            query = query.order_by("created_at")
-
-        if limit:
-            query = query[:limit]
-
-        return query
-
-    def get_plans_paginated(
-        self,
-        user_id: str,
-        gt_id: Optional[uuid.UUID] = None,
-        lte_id: Optional[uuid.UUID] = None,
-        desc: bool = True,
-        limit: Optional[int] = None,
-    ) -> Iterator[Tuple[int, MoneyPlan]]:
-        """
-        Get paginated money plans for position-based pagination.
-        Returns tuples of (position, plan) where position can be used as a cursor.
-        """
-        # Base query
-        query = MoneyPlan.objects.filter(owner_id=user_id)
-
-        # Apply pagination filters
-        if gt_id:
-            # Find the creation time of the reference plan
-            ref_time = MoneyPlan.objects.get(id=gt_id).created_at
-            if desc:
-                query = query.filter(created_at__lt=ref_time)
-            else:
-                query = query.filter(created_at__gt=ref_time)
-
-        if lte_id:
-            # Find the creation time of the reference plan
-            ref_time = MoneyPlan.objects.get(id=lte_id).created_at
-            if desc:
-                query = query.filter(created_at__gte=ref_time)
-            else:
-                query = query.filter(created_at__lte=ref_time)
-
-        # Apply sorting
-        query = query.order_by("-created_at" if desc else "created_at")
-
-        # Apply limit
-        if limit:
-            query = query[:limit]
-
-        # Generate positions for the plans
-        position = 0
-        for plan in query:
-            position += 1
-            yield position, plan
-
-
-class AccountRepository:
-    """Repository for Account entity."""
-
-    def get_by_id(self, account_id: uuid.UUID, user_id: str) -> Account:
-        """Get an account by ID and user ID."""
-        return Account.objects.get(id=account_id, owner_id=user_id)
-
-    def find_by_name(self, name: str, user_id: str) -> Optional[Account]:
-        """Find an account by name and user ID."""
-        return Account.objects.filter(name=name, owner_id=user_id).first()
-
-    def get_or_create(self, name: str, user_id: str) -> Tuple[Account, bool]:
-        """Get or create an account."""
-        return Account.objects.get_or_create(name=name, owner_id=user_id, defaults={"id": uuid.uuid4()})
-
-    @transaction.atomic
-    def save(self, account: Account) -> None:
-        """Save an account."""
-        account.save()
-
-
-class PlanAccountRepository:
-    """Repository for PlanAccount entity."""
-
-    def get_by_id(self, plan_account_id: uuid.UUID) -> PlanAccount:
-        """Get a plan account by ID."""
-        return PlanAccount.objects.get(id=plan_account_id)
-
-    def find_by_account_and_plan(self, account_id: uuid.UUID, plan_id: uuid.UUID) -> Optional[PlanAccount]:
-        """Find a plan account by account ID and plan ID."""
-        return PlanAccount.objects.filter(account_id=account_id, plan_id=plan_id).first()
-
-    @transaction.atomic
-    def create(self, plan_id: uuid.UUID, account_id: uuid.UUID) -> PlanAccount:
-        """Create a new plan account."""
-        plan_account = PlanAccount(id=uuid.uuid4(), plan_id=plan_id, account_id=account_id)
-        plan_account.save()
-        return plan_account
-
-    @transaction.atomic
-    def save(self, plan_account: PlanAccount) -> None:
-        """Save a plan account."""
-        plan_account.save()
-
-
-class BucketRepository:
-    """Repository for Bucket entity."""
-
-    def get_by_id(self, bucket_id: uuid.UUID) -> Bucket:
-        """Get a bucket by ID."""
-        return Bucket.objects.get(id=bucket_id)
-
-    def find_by_name_and_plan_account(self, name: str, plan_account_id: uuid.UUID) -> Optional[Bucket]:
-        """Find a bucket by name and plan account ID."""
-        return Bucket.objects.filter(name=name, plan_account_id=plan_account_id).first()
-
-    @transaction.atomic
-    def create(
-        self, plan_account_id: uuid.UUID, name: str, category: str, allocated_amount: float = 0
-    ) -> Bucket:
-        """Create a new bucket."""
-        bucket = Bucket(
-            id=uuid.uuid4(),
-            plan_account_id=plan_account_id,
-            name=name,
-            category=category,
-            allocated_amount=allocated_amount,
-        )
-        bucket.save()
-        return bucket
-
-    @transaction.atomic
-    def save(self, bucket: Bucket) -> None:
-        """Save a bucket."""
-        bucket.save()
+        # Convert to domain model and return
+        return to_domain_money_plan(orm_plan)

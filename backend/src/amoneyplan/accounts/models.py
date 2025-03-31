@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -5,6 +7,8 @@ from django.db import models
 from amoneyplan.common.models import BaseModel, SafeCuid16Field
 
 from .tenancy import get_current_account
+
+logger = logging.getLogger("django")
 
 
 class User(AbstractUser):
@@ -16,6 +20,7 @@ class User(AbstractUser):
 class AccountQuerySet(models.QuerySet):
     def for_current_account(self):
         account = get_current_account()
+        logger.info("Filtering AccountQuerySet for current account: %s", account)
         if account:
             return self.filter(user_account=account)
         return self.none()
@@ -61,6 +66,8 @@ class AccountMembership(BaseModel):
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
     invited_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
         on_delete=models.PROTECT,
         related_name="invitations_sent",
         help_text="User who sent the invitation.",

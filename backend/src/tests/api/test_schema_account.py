@@ -1,6 +1,7 @@
 import pytest
 from strawberry.relay import to_base64
-from utils import TestGraphQLAPI
+
+from .utils import TestGraphQLAPI
 
 
 @pytest.mark.django_db(transaction=True)

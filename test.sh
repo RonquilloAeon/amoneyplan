@@ -10,6 +10,8 @@ fi
 target=$1
 shift  # Remove first argument, leaving remaining args for the test command
 
+clear
+
 case $target in
     "backend")
         cd backend || exit 1

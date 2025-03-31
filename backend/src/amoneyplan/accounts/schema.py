@@ -4,10 +4,12 @@ from allauth.socialaccount.models import SocialApp
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate
 from strawberry.types import Info
 
-from amoneyplan.accounts.models import User
+from amoneyplan.accounts.models import Account, AccountMembership, User
+
+from .auth import generate_token
 
 
 @strawberry.type
@@ -32,8 +34,9 @@ class GoogleAuthResponse:
 @strawberry.type
 class AuthResponse:
     success: bool
-    user: UserType | None = None
-    error: AuthError | None = None
+
+    error: str | None = None
+    token: str | None = None
 
 
 @strawberry.type
@@ -68,6 +71,7 @@ class AuthMutations:
             if User.objects.filter(username=username).exists():
                 return AuthResponse(success=False, error=AuthError(message="Username already exists"))
 
+            # TODO move to a use case
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -75,9 +79,18 @@ class AuthMutations:
                 first_name=first_name,
                 last_name=last_name,
             )
+            account = Account.objects.create(
+                owner=user,
+                name=f"{username} Money Planning",
+            )
+            AccountMembership.objects.create(
+                account=account,
+                user=user,
+                role="manager",
+                status="active",
+            )
 
-            login(info.context.request, user)
-            return AuthResponse(success=True, user=user)
+            return AuthResponse(success=True, token=generate_token(user))
         except Exception as e:
             return AuthResponse(success=False, error=AuthError(message=str(e)))
 
@@ -92,15 +105,7 @@ class AuthMutations:
         if user is None:
             return AuthResponse(success=False, error=AuthError(message="Invalid credentials"))
 
-        login(info.context.request, user)
-        return AuthResponse(success=True, user=user)
-
-    @strawberry.mutation
-    def logout(self, info: Info) -> AuthResponse:
-        if info.context.request.user.is_authenticated:
-            logout(info.context.request)
-            return AuthResponse(success=True)
-        return AuthResponse(success=False, error=AuthError(message="Not logged in"))
+        return AuthResponse(success=True, token=generate_token(user))
 
     @strawberry.mutation
     def google_callback(self, info: Info, code: str) -> AuthResponse:

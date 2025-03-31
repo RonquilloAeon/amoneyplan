@@ -47,6 +47,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "amoneyplan.accounts.middleware.JWTAuthenticationMiddleware",
 ]
 
 ROOT_URLCONF = "amoneyplan.urls"
@@ -194,3 +195,7 @@ SOCIALACCOUNT_PROVIDERS = {
         ],
     }
 }
+
+# JWT
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_SECONDS = 60 * 60  # 1 hour

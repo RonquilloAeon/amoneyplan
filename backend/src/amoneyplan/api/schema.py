@@ -3,11 +3,11 @@ from datetime import date
 from typing import List, Optional
 
 import strawberry
-from django.apps import apps
 from strawberry import relay
 from strawberry.types import Info
 
 from amoneyplan.accounts.schema import AuthMutations, AuthQueries
+from amoneyplan.common import graphql as graphql_common
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import (
     AccountAllocationConfig,
@@ -15,6 +15,8 @@ from amoneyplan.domain.money_plan import (
     MoneyPlanError,
     PlanAlreadyCommittedError,
 )
+from amoneyplan.money_plans.models import PlanAccount as OrmPlanAccount
+from amoneyplan.money_plans.use_cases import MoneyPlanUseCases
 
 logger = logging.getLogger("amoneyplan")
 
@@ -69,6 +71,33 @@ class Account(relay.Node):
         )
         return account
 
+    @staticmethod
+    def from_orm(orm_plan_account: OrmPlanAccount) -> "Account":
+        """
+        Create an Account instance from an ORM PlanAccount object.
+        This method is useful for converting ORM objects to GraphQL types.
+        """
+        buckets = [
+            Bucket(
+                id=str(bucket.id),
+                bucket_name=bucket.name,
+                category=bucket.category,
+                allocated_amount=float(bucket.allocated_amount),
+            )
+            for bucket in orm_plan_account.buckets.all()
+        ]
+
+        orm_account = orm_plan_account.account
+        account = Account(
+            id=str(orm_account.id),
+            name=orm_account.name,
+            buckets=buckets,
+            # TODO: implement
+            is_checked=False,
+            notes="",
+        )
+        return account
+
 
 @strawberry.type
 class MoneyPlan(relay.Node):
@@ -85,7 +114,8 @@ class MoneyPlan(relay.Node):
 
     @classmethod
     def resolve_node(cls, node_id: str, info: Info) -> Optional["MoneyPlan"]:
-        use_case = apps.get_app_config("money_plans").money_planner
+        use_case = MoneyPlanUseCases()
+
         try:
             plan_result = use_case.get_plan(node_id)
             if plan_result.success and plan_result.has_data():
@@ -259,9 +289,7 @@ class Query(AuthQueries):
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         if plan_id:
             plan_id = plan_id.node_id
@@ -299,7 +327,7 @@ class Query(AuthQueries):
                 ),
             )
         try:
-            use_case = apps.get_app_config("money_plans").money_planner
+            use_case = MoneyPlanUseCases()
 
             # Convert cursor strings to notification positions
             after_pos = None if after is None else int(strawberry.relay.from_base64(after)[1])
@@ -423,13 +451,12 @@ class Query(AuthQueries):
 @strawberry.type
 class MoneyPlanMutations:
     @strawberry.mutation
-    def start_plan(self, info: Info, input: PlanStartInput) -> PlanResult:
+    @graphql_common.gql_error_handler
+    def start_plan(self, info: Info, input: PlanStartInput) -> graphql_common.MutationResponse:
         """
         Start a new Money Plan.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             if input.copy_from:
@@ -440,7 +467,7 @@ class MoneyPlanMutations:
                     notes=input.notes,
                 )
                 if not plan_result.success:
-                    return PlanResult(error=Error(message=plan_result.message), success=False)
+                    return graphql_common.ApplicationError(message=plan_result.message)
                 plan_id = plan_result.data
             else:
                 # Create plan with provided allocations if any
@@ -448,7 +475,7 @@ class MoneyPlanMutations:
                 if input.default_allocations:
                     default_allocations = [config.to_domain() for config in input.default_allocations]
 
-                plan_result = use_case.create_plan(
+                plan_result = use_case.start_plan(
                     initial_balance=input.initial_balance,
                     default_allocations=default_allocations,
                     notes=input.notes,
@@ -456,29 +483,29 @@ class MoneyPlanMutations:
                 )
 
                 if not plan_result.success:
-                    return PlanResult(error=Error(message=plan_result.message), success=False)
+                    return graphql_common.ApplicationError(message=plan_result.message)
                 plan_id = plan_result.data
 
             get_plan_result = use_case.get_plan(plan_id)
-            if not get_plan_result.success:
-                return PlanResult(error=Error(message=get_plan_result.message), success=False)
 
-            return PlanResult(money_plan=MoneyPlan.from_domain(get_plan_result.data), success=True)
+            if not get_plan_result.success:
+                return graphql_common.ApplicationError(message=get_plan_result.message)
+
+            # Return a Success response with the moneyPlan data
+            return graphql_common.Success.from_node(
+                MoneyPlan.from_domain(get_plan_result.data),
+                is_message_displayable=True,
+                message="Plan created successfully.",
+            )
         except PlanAlreadyCommittedError as e:
-            logger.warning("Cannot create new plan: %s", str(e))
-            return PlanResult(error=Error(message=str(e)), success=False)
-        except Exception as e:
-            logger.error("Error creating plan: %s", str(e), exc_info=True)
-            return PlanResult(error=Error(message=str(e)), success=False)
+            return graphql_common.ApplicationError(message=str(e))
 
     @strawberry.mutation
     def allocate_funds(self, info: Info, input: AllocateFundsInput) -> PlanResult:
         """
         Allocate funds to a bucket within an account.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             result = use_case.allocate_funds(
@@ -504,9 +531,7 @@ class MoneyPlanMutations:
         """
         Reverse a previous allocation and apply a corrected amount.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             result = use_case.reverse_allocation(
@@ -533,10 +558,8 @@ class MoneyPlanMutations:
         """
         Adjust the overall plan balance.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
+        use_case = MoneyPlanUseCases()
         plan_id = input.plan_id.node_id
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
 
         try:
             result = use_case.adjust_plan_balance(
@@ -559,9 +582,7 @@ class MoneyPlanMutations:
         """
         Change the bucket configuration for an account.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             bucket_configs = [config.to_domain() for config in input.new_bucket_config]
@@ -585,15 +606,14 @@ class MoneyPlanMutations:
             return PlanResult(error=Error(message=str(e)), success=False)
 
     @strawberry.mutation
-    def add_account(self, info: Info, input: AddAccountInput) -> PlanResult:
+    def add_account(self, info: Info, input: AddAccountInput) -> graphql_common.MutationResponse:
         """
         Add an account to a Money Plan.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
+        use_case = MoneyPlanUseCases()
+
         plan_id = input.plan_id.node_id
         logger.info(f"Adding account '{input.name}' to plan {plan_id}")
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
 
         buckets = None
         if input.buckets:
@@ -606,28 +626,25 @@ class MoneyPlanMutations:
         account_result = use_case.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
 
         if not account_result.success:
-            logger.error(f"Error adding account: {account_result.message}")
-            return PlanResult(error=Error(message=account_result.message), success=False)
+            logger.info(f"Error adding account: {account_result.message}")
+            return graphql_common.ApplicationError(message=f"Failed to add account: {account_result.message}")
 
-        # Get updated plan
-        plan_result = use_case.get_plan(plan_id)
-        if not plan_result.success:
-            logger.error(f"Error retrieving plan: {plan_result.message}")
-            return PlanResult(error=Error(message=plan_result.message), success=False)
+        # Query for PlanAccount
+        # It's ok to use ORM here, following CQRS pattern
+        plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_result.data)
 
-        logger.info(f"Account created with ID: {account_result.data}")
-        logger.info(f"Retrieved updated plan. Account count: {len(plan_result.data.accounts)}")
-
-        return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+        return graphql_common.Success.from_node(
+            Account.from_orm(plan_account),
+            is_message_displayable=True,
+            message=f"Account '{input.name}' added successfully to your money plan.",
+        )
 
     @strawberry.mutation
-    def commit_plan(self, info: Info, input: CommitPlanInput) -> PlanResult:
+    def commit_plan(self, info: Info, input: CommitPlanInput) -> graphql_common.MutationResponse:
         """
         Commit a Money Plan.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         plan_id = input.plan_id.node_id
 
@@ -635,23 +652,28 @@ class MoneyPlanMutations:
         commit_result = use_case.commit_plan(plan_id=plan_id)
 
         if not commit_result.success:
-            logger.error(f"Error committing plan: {commit_result.message}")
-            return PlanResult(error=Error(message=commit_result.message), success=False)
+            logger.info(f"Error committing plan: {commit_result.message}")
+            return graphql_common.ApplicationError(message=f"Failed to commit plan: {commit_result.message}")
 
         # Get updated plan
         plan_result = use_case.get_plan(plan_id)
         if not plan_result.success:
-            logger.error(f"Error retrieving plan: {plan_result.message}")
-            return PlanResult(error=Error(message=plan_result.message), success=False)
+            logger.info(f"Error retrieving plan: {plan_result.message}")
+            return graphql_common.ApplicationError(
+                message=f"Failed to retrieve committed plan: {plan_result.message}"
+            )
 
-        return PlanResult(money_plan=MoneyPlan.from_domain(plan_result.data), success=True)
+        return graphql_common.Success.from_node(
+            MoneyPlan.from_domain(plan_result.data),
+            is_message_displayable=True,
+            message="Your money plan was committed successfully",
+        )
 
     @strawberry.mutation
     def archive_plan(self, info: Info, input: ArchivePlanInput) -> PlanResult:
         """Archive a money plan to prevent further modifications."""
         try:
-            use_case = apps.get_app_config("money_plans").money_planner
-            use_case.user_id = str(info.context.request.user.id)
+            use_case = MoneyPlanUseCases()
             plan_id = input.plan_id.node_id
 
             archive_result = use_case.archive_plan(plan_id)
@@ -671,9 +693,7 @@ class MoneyPlanMutations:
     @strawberry.mutation
     def remove_account(self, info: Info, input: RemoveAccountInput) -> PlanResult:
         """Remove an account from a Money Plan."""
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             plan_id = input.plan_id.node_id
@@ -697,9 +717,7 @@ class MoneyPlanMutations:
     @strawberry.mutation
     def set_account_checked_state(self, info: Info, input: SetAccountCheckedStateInput) -> PlanResult:
         """Set the checked state of an account."""
-        use_case = apps.get_app_config("money_plans").money_planner
-        # Set user ID from request context
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             plan_id = input.plan_id.node_id
@@ -726,8 +744,7 @@ class MoneyPlanMutations:
         """
         Edit the notes of a plan.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             plan_id = input.plan_id.node_id
@@ -749,8 +766,7 @@ class MoneyPlanMutations:
         """
         Edit the notes of an account.
         """
-        use_case = apps.get_app_config("money_plans").money_planner
-        use_case.user_id = str(info.context.request.user.id)
+        use_case = MoneyPlanUseCases()
 
         try:
             plan_id = input.plan_id.node_id
@@ -783,5 +799,4 @@ class Mutation:
         return AuthMutations()
 
 
-# Create the GraphQL schema
-schema = strawberry.Schema(query=Query, mutation=Mutation)
+schema = strawberry.federation.Schema(query=Query, mutation=Mutation)

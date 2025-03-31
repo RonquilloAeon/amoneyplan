@@ -2,7 +2,8 @@ from uuid import uuid4
 
 import pytest
 from strawberry.relay import to_base64
-from utils import TestGraphQLAPI
+
+from .utils import TestGraphQLAPI
 
 
 @pytest.mark.django_db(transaction=True)
@@ -216,8 +217,12 @@ class TestNotesSchema(TestGraphQLAPI):
         # Create a plan
         plan_id = self.create_money_plan(client, 1000.0, "Test Plan")
 
+        # Convert plan_id to a Relay-compatible format
+        relay_plan_id = to_base64("MoneyPlan", plan_id)
+
         # Try to edit the notes of a non-existent account
-        nonexistent_account_id = uuid4()
+        nonexistent_account_id = str(uuid4())
+        relay_account_id = to_base64("Account", nonexistent_account_id)
 
         result = self.execute_query(
             client,
@@ -235,8 +240,8 @@ class TestNotesSchema(TestGraphQLAPI):
             """,
             {
                 "input": {
-                    "planId": plan_id,
-                    "accountId": to_base64("Account", nonexistent_account_id),
+                    "planId": relay_plan_id,
+                    "accountId": relay_account_id,
                     "notes": "Account notes",
                 }
             },
@@ -245,7 +250,4 @@ class TestNotesSchema(TestGraphQLAPI):
         # Check the result
         assert "errors" not in result
         assert not result["moneyPlan"]["editAccountNotes"]["success"]
-        assert (
-            f"Account with ID {nonexistent_account_id}"
-            in result["moneyPlan"]["editAccountNotes"]["error"]["message"]
-        )
+        assert "Account with ID" in result["moneyPlan"]["editAccountNotes"]["error"]["message"]

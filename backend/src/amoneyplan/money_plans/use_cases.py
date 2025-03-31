@@ -1,28 +1,19 @@
-"""
-Service classes for the Money Plan app.
-"""
-
 import logging
 from datetime import date, datetime, timezone
-from decimal import Decimal
-from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple, TypeVar, Union
-from uuid import UUID
+from typing import TYPE_CHECKING, List, Optional, TypeVar, Union
 
-from django.db import models, transaction
+from django.db import transaction
 
+from amoneyplan.common.models import generate_safe_cuid16
 from amoneyplan.common.use_cases import UseCaseResult
 from amoneyplan.domain.money import Money
 
 if TYPE_CHECKING:
     from amoneyplan.domain.money_plan import MoneyPlan as DomainMoneyPlan
 
-from .models import Bucket, MoneyPlan, PlanAccount
+from .models import MoneyPlan
 from .repositories import (
-    AccountRepository,
-    BucketRepository,
     MoneyPlanRepository,
-    PlanAccountRepository,
-    to_domain_money_plan,
 )
 
 logger = logging.getLogger("amoneyplan")
@@ -96,10 +87,6 @@ class AccountAllocationConfig:
 class MoneyPlanUseCases:
     def __init__(self):
         self.money_plan_repo = MoneyPlanRepository()
-        self.account_repo = AccountRepository()
-        self.plan_account_repo = PlanAccountRepository()
-        self.bucket_repo = BucketRepository()
-        self.user_id = None  # Will be set by the GraphQL context
 
     def _get_current_plan_id(self) -> Optional[str]:
         """Get the current uncommitted plan ID by checking the most recent plans."""
@@ -107,7 +94,7 @@ class MoneyPlanUseCases:
             return None
 
         # Look for the most recent plan
-        current_plan = self.money_plan_repo.get_current_plan(self.user_id)
+        current_plan = self.money_plan_repo.get_current_plan()
         if current_plan:
             return str(current_plan.id)
 
@@ -118,13 +105,13 @@ class MoneyPlanUseCases:
         if plan.is_archived:
             raise MoneyPlanError("Cannot modify an archived plan")
 
-    def create_plan(
+    def start_plan(
         self,
         initial_balance: Union[Money, float, str],
         default_allocations: Optional[List[AccountAllocationConfig]] = None,
         notes: str = "",
         plan_date: Optional[date] = None,
-    ) -> UseCaseResult[UUID]:
+    ) -> UseCaseResult[str]:
         """
         Create a new Money Plan.
 
@@ -149,55 +136,24 @@ class MoneyPlanUseCases:
                         )
                     )
 
-            # Convert to Money and get decimal value
-            if isinstance(initial_balance, (float, str, int)):
-                balance = Money(initial_balance)
-            else:
-                balance = initial_balance
-
-            # Create new plan
             with transaction.atomic():
-                plan = self.money_plan_repo.create(
-                    initial_balance=balance.as_decimal,
-                    owner_id=self.user_id,
-                    notes=notes,
+                # Generate a new ID for the plan
+                plan_id = generate_safe_cuid16()
+
+                # Create a new domain model MoneyPlan using the class method
+                plan = DomainMoneyPlan.start_plan(
+                    id=plan_id,
+                    initial_balance=initial_balance,
+                    created_at=datetime.now(timezone.utc),
                     plan_date=plan_date or date.today(),
+                    default_allocations=default_allocations,
+                    notes=notes,
                 )
 
-                # Process default allocations if provided
-                if default_allocations:
-                    for config in default_allocations:
-                        # Get or create the account
-                        account, _ = self.account_repo.get_or_create(config.name, self.user_id)
+                # Save the domain model through the repository
+                self.money_plan_repo.save(plan)
 
-                        # Create plan account
-                        plan_account = self.plan_account_repo.create(plan_id=plan.id, account_id=account.id)
-
-                        # Create buckets
-                        if config.buckets:
-                            for bucket_config in config.buckets:
-                                bucket_amount = bucket_config.allocated_amount.as_decimal
-                                self.bucket_repo.create(
-                                    plan_account_id=plan_account.id,
-                                    name=bucket_config.bucket_name,
-                                    category=bucket_config.category,
-                                    allocated_amount=bucket_amount,
-                                )
-                                # Reduce the remaining balance
-                                plan.remaining_balance -= bucket_amount
-                        else:
-                            # Create default bucket if none provided
-                            self.bucket_repo.create(
-                                plan_account_id=plan_account.id,
-                                name="Default",
-                                category="default",
-                                allocated_amount=0,
-                            )
-
-                        # Update plan
-                        self.money_plan_repo.save(plan)
-
-            return UseCaseResult.success(data=plan.id)
+            return UseCaseResult.success(data=plan_id)
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:
@@ -215,10 +171,8 @@ class MoneyPlanUseCases:
             UseCaseResult containing the Money Plan as a domain object or error information
         """
         try:
-            # Convert str to UUID if needed for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            plan = self.money_plan_repo.get_by_id(plan_uuid, self.user_id)
-            return UseCaseResult.success(data=to_domain_money_plan(plan))
+            plan = self.money_plan_repo.get_by_id(plan_id)
+            return UseCaseResult.success(data=plan)
         except MoneyPlan.DoesNotExist:
             error = MoneyPlanError(f"Plan with ID {plan_id} does not exist")
             return UseCaseResult.failure(error=error)
@@ -234,14 +188,13 @@ class MoneyPlanUseCases:
             UseCaseResult containing the current Money Plan as a domain object or None
         """
         try:
-            current_plan_id = self._get_current_plan_id()
-            if current_plan_id is None:
+            # Get the domain model directly from the repository
+            plan = self.money_plan_repo.get_current_plan()
+
+            if plan is None:
                 return UseCaseResult.success(data=None, message="No current plan found")
 
-            plan = self.money_plan_repo.get_by_id(current_plan_id, self.user_id)
-            return UseCaseResult.success(data=to_domain_money_plan(plan))
-        except MoneyPlan.DoesNotExist:
-            return UseCaseResult.success(data=None)
+            return UseCaseResult.success(data=plan)
         except Exception as e:
             logger.error(f"Error retrieving current plan: {e}", exc_info=True)
             return UseCaseResult.failure(error=e)
@@ -264,50 +217,23 @@ class MoneyPlanUseCases:
         logger.info("Adding account %s to plan %s", name, plan_id)
 
         try:
-            # Convert str to UUID if needed for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
+            # Get the domain model from repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
+            # Generate a new account ID using cuid16
+            account_id = generate_safe_cuid16()
 
-            # Check if plan is not committed
-            if plan.committed:
-                return UseCaseResult.failure(PlanAlreadyCommittedError("Cannot modify a committed plan"))
+            # Use the domain model's add_account method
+            plan.add_account(account_id=account_id, name=name, buckets=buckets)
 
-            # Get or create the account
-            account, _ = self.account_repo.get_or_create(name, self.user_id)
-
-            # Create plan account
-            plan_account = self.plan_account_repo.create(plan_id=plan_uuid, account_id=account.id)
-
-            # Add buckets if provided
-            if buckets:
-                for bucket_config in buckets:
-                    bucket_amount = bucket_config.allocated_amount.as_decimal
-                    self.bucket_repo.create(
-                        plan_account_id=plan_account.id,
-                        name=bucket_config.bucket_name,
-                        category=bucket_config.category,
-                        allocated_amount=bucket_amount,
-                    )
-
-                    # Update remaining balance
-                    plan.remaining_balance -= bucket_amount
-            else:
-                # Create default bucket if none provided
-                self.bucket_repo.create(
-                    plan_account_id=plan_account.id, name="Default", category="default", allocated_amount=0
-                )
-
-            # Save plan
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
-            return UseCaseResult.success(data=str(account.id))
+            return UseCaseResult.success(data=account_id)
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:
@@ -327,43 +253,17 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
+            # Use the domain model's remove_account method
+            plan.remove_account(account_id)
 
-            # Check if plan is not committed
-            if plan.committed:
-                return UseCaseResult.failure(
-                    error=PlanAlreadyCommittedError("Cannot modify a committed plan")
-                )
-
-            # Convert to UUID for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            account_uuid = UUID(account_id) if isinstance(account_id, str) else account_id
-
-            try:
-                # Find the plan account
-                plan_account = PlanAccount.objects.get(plan_id=plan_uuid, account_id=account_uuid)
-            except PlanAccount.DoesNotExist:
-                return UseCaseResult.failure(
-                    error=AccountNotFoundError(f"Account with ID {account_id} not found in plan")
-                )
-
-            # Calculate total allocated in account's buckets to add back to remaining balance
-            total_allocated = plan_account.get_total_allocated()
-
-            # Add back funds to remaining balance
-            plan.remaining_balance += total_allocated
-
-            # Delete plan account (cascades to buckets)
-            plan_account.delete()
-
-            # Save plan
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
             return UseCaseResult.success()
@@ -394,63 +294,17 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
+            # Use the domain model's allocate_funds method
+            plan.allocate_funds(account_id=account_id, bucket_name=bucket_name, amount=amount)
 
-            # Check if plan is not committed
-            if plan.committed:
-                return UseCaseResult.failure(
-                    error=PlanAlreadyCommittedError("Cannot modify a committed plan")
-                )
-
-            # Convert amount to Money
-            if isinstance(amount, (float, str, int)):
-                amount = Money(amount)
-
-            # Check if we have enough remaining funds
-            if amount.as_decimal > plan.remaining_balance:
-                return UseCaseResult.failure(
-                    error=InsufficientFundsError(
-                        f"Not enough funds to allocate {amount}. Remaining: {plan.remaining_balance}"
-                    )
-                )
-
-            # Convert to UUID for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            account_uuid = UUID(account_id) if isinstance(account_id, str) else account_id
-
-            try:
-                # Find the plan account
-                plan_account = PlanAccount.objects.get(plan_id=plan_uuid, account_id=account_uuid)
-            except PlanAccount.DoesNotExist:
-                return UseCaseResult.failure(
-                    error=AccountNotFoundError(f"Account with ID {account_id} not found in plan")
-                )
-
-            # Find bucket
-            bucket = self.bucket_repo.find_by_name_and_plan_account(
-                name=bucket_name, plan_account_id=plan_account.id
-            )
-
-            if not bucket:
-                return UseCaseResult.failure(
-                    error=BucketNotFoundError(
-                        f"Bucket '{bucket_name}' not found in account '{plan_account.account.name}'"
-                    )
-                )
-
-            # Update the bucket's allocation
-            bucket.allocated_amount += amount.as_decimal
-            self.bucket_repo.save(bucket)
-
-            # Reduce the remaining balance
-            plan.remaining_balance -= amount.as_decimal
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
             return UseCaseResult.success()
@@ -483,67 +337,22 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
-
-            # Check if plan is not committed
-            if plan.committed:
-                return UseCaseResult.failure(
-                    error=PlanAlreadyCommittedError("Cannot modify a committed plan")
-                )
-
-            # Convert to UUID for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            account_uuid = UUID(account_id) if isinstance(account_id, str) else account_id
-
-            if isinstance(original_amount, (float, str)):
-                original_amount = Money(original_amount)
-
-            if isinstance(corrected_amount, (float, str)):
-                corrected_amount = Money(corrected_amount)
-
-            try:
-                # Find the plan account
-                plan_account = PlanAccount.objects.get(plan_id=plan_uuid, account_id=account_uuid)
-            except PlanAccount.DoesNotExist:
-                return UseCaseResult.failure(
-                    error=AccountNotFoundError(f"Account with ID {account_id} not found in plan")
-                )
-
-            # Find bucket
-            bucket = self.bucket_repo.find_by_name_and_plan_account(
-                name=bucket_name, plan_account_id=plan_account.id
+            # Use the domain model's reverse_allocation method
+            plan.reverse_allocation(
+                account_id=account_id,
+                bucket_name=bucket_name,
+                original_amount=original_amount,
+                corrected_amount=corrected_amount,
             )
 
-            if not bucket:
-                return UseCaseResult.failure(
-                    error=BucketNotFoundError(f"Bucket '{bucket_name}' not found in account")
-                )
-
-            # Calculate the net adjustment
-            net_adjustment = corrected_amount.as_decimal - original_amount.as_decimal
-
-            # Check if we have enough funds for the adjustment
-            if net_adjustment > plan.remaining_balance:
-                return UseCaseResult.failure(
-                    error=InsufficientFundsError(
-                        f"Not enough funds for adjustment of {net_adjustment}. "
-                        f"Remaining: {plan.remaining_balance}"
-                    )
-                )
-
-            # Update the bucket's allocation
-            bucket.allocated_amount += net_adjustment
-            self.bucket_repo.save(bucket)
-
-            # Update remaining balance
-            plan.remaining_balance -= net_adjustment
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
             return UseCaseResult.success()
@@ -569,28 +378,17 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
+            # Use the domain model's adjust_balance method
+            plan.adjust_balance(adjustment, reason)
 
-            # Check if plan is not committed
-            if plan.committed:
-                return UseCaseResult.failure(
-                    error=PlanAlreadyCommittedError("Cannot modify a committed plan")
-                )
-
-            # Convert to Money
-            if isinstance(adjustment, (float, str)):
-                adjustment = Money(adjustment)
-
-            # Update the initial and remaining balances
-            plan.initial_balance += adjustment.as_decimal
-            plan.remaining_balance += adjustment.as_decimal
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
             return UseCaseResult.success()
@@ -616,61 +414,21 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from the repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
+            # Get the domain model
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
+            # Use the domain model's change_account_configuration method
+            plan.change_account_configuration(account_id, new_bucket_config)
 
-            # Check if plan is not committed
-            if plan.committed:
-                return UseCaseResult.failure(
-                    error=PlanAlreadyCommittedError("Cannot modify a committed plan")
-                )
-
-            # Convert to UUID for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            account_uuid = UUID(account_id) if isinstance(account_id, str) else account_id
-
-            try:
-                # Find the plan account
-                plan_account = PlanAccount.objects.get(plan_id=plan_uuid, account_id=account_uuid)
-            except PlanAccount.DoesNotExist:
-                return UseCaseResult.failure(
-                    error=AccountNotFoundError(f"Account with ID {account_id} not found in plan")
-                )
-
-            # Calculate current total allocated to this account's buckets
-            current_total = plan_account.get_total_allocated()
-
-            # Calculate new total from new configuration
-            new_total = Decimal("0.00")
-            for config in new_bucket_config:
-                new_total += config.allocated_amount.as_decimal
-
-            # Calculate adjustment needed to remaining balance
-            adjustment = current_total - new_total
-
-            # Update the plan's remaining balance
-            plan.remaining_balance += adjustment
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
-            # Delete existing buckets
-            plan_account.buckets.all().delete()
-
-            # Create new buckets
-            for config in new_bucket_config:
-                self.bucket_repo.create(
-                    plan_account_id=plan_account.id,
-                    name=config.bucket_name,
-                    category=config.category,
-                    allocated_amount=config.allocated_amount.as_decimal,
-                )
-
-            return UseCaseResult.success()
+            return UseCaseResult.success(message="Account configuration updated successfully")
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:
@@ -693,31 +451,25 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
-            # Convert to UUID for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            account_uuid = UUID(account_id) if isinstance(account_id, str) else account_id
+            # Get the domain model from the repository
+            plan_result = self.get_plan(plan_id)
+            if not plan_result.success:
+                return UseCaseResult.failure(error=plan_result.error)
+
+            # Get the domain model
+            plan = plan_result.data
 
             try:
-                # Find the plan account
-                plan_account = PlanAccount.objects.get(plan_id=plan_uuid, account_id=account_uuid)
-            except PlanAccount.DoesNotExist:
-                return UseCaseResult.failure(
-                    error=AccountNotFoundError(f"Account with ID {account_id} not found")
-                )
+                # Use the domain model's set_account_checked_state method
+                plan.set_account_checked_state(account_id, is_checked)
 
-            # Check state
-            if plan_account.is_checked == is_checked:
-                return UseCaseResult.failure(
-                    error=AccountStateMatchError(
-                        "Account is already checked" if is_checked else "Account is already unchecked"
-                    )
-                )
+                # Save the updated domain model through the repository
+                self.money_plan_repo.save(plan)
 
-            # Update checked state
-            plan_account.is_checked = is_checked
-            self.plan_account_repo.save(plan_account)
+                return UseCaseResult.success()
+            except AccountStateMatchError as e:
+                return UseCaseResult.failure(error=e)
 
-            return UseCaseResult.success()
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:
@@ -736,50 +488,18 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from the repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
+            # Get the domain model
             plan = plan_result.data
 
-            # Check if plan is already committed
-            if plan.committed:
-                return UseCaseResult.failure(error=PlanAlreadyCommittedError("Plan is already committed"))
+            # Use the domain model's commit method which has all the validation logic
+            plan.commit()
 
-            # Check invariants
-            # 1. At least one account must exist
-            if not plan.plan_accounts.exists():
-                return UseCaseResult.failure(
-                    error=InvalidPlanStateError("Plan must have at least one account to be committed")
-                )
-
-            # 2. Each account must have at least one bucket
-            for account in plan.plan_accounts.all():
-                if not account.buckets.exists():
-                    return UseCaseResult.failure(
-                        error=InvalidPlanStateError(
-                            f"Account '{account.account.name}' must have at least one bucket"
-                        )
-                    )
-
-            # 3. Sum of all bucket allocations must equal the initial balance
-            total_allocated = Bucket.objects.filter(plan_account__plan=plan).aggregate(
-                total=models.Sum("allocated_amount")
-            )["total"] or Decimal("0.00")
-
-            # Allow for small rounding errors (less than 1 cent)
-            if abs(total_allocated - plan.initial_balance) >= Decimal("0.01"):
-                difference = plan.initial_balance - total_allocated
-                return UseCaseResult.failure(
-                    error=InvalidPlanStateError(
-                        f"Sum of bucket allocations ({total_allocated}) "
-                        f"must equal initial balance ({plan.initial_balance}). "
-                        f"Difference: {difference}"
-                    )
-                )
-
-            # All invariants satisfied, commit the plan
-            plan.committed = True
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
             return UseCaseResult.success(message="Plan committed successfully")
@@ -788,38 +508,6 @@ class MoneyPlanUseCases:
         except Exception as e:
             logger.error(f"Error committing plan: {e}", exc_info=True)
             return UseCaseResult.failure(error=e)
-
-    def get_plans(
-        self,
-        *,
-        gt: int | None = None,
-        lte: int | None = None,
-        desc: bool = True,  # Default to descending (most recent first)
-        limit: int | None = None,
-    ) -> Iterator[Tuple[int, DMP]]:
-        """
-        Get money plans with their notification positions for cursor-based pagination.
-
-        Args:
-            gt: Return plans after this notification position
-            lte: Return plans up to and including this notification position
-            desc: Order by notification position descending (defaults to True for most recent first)
-            limit: Maximum number of plans to return
-
-        Returns:
-            Iterator of (position, plan) tuples where position can be used as a cursor
-            and plan is a domain object
-        """
-        # For compatibility with the eventsourcing implementation,
-        # we'll use a simplified approach converting gt/lte positions to UUIDs
-        gt_id = UUID(int=gt) if gt is not None else None
-        lte_id = UUID(int=lte) if lte is not None else None
-
-        for position, plan in self.money_plan_repo.get_plans_paginated(
-            user_id=self.user_id, gt_id=gt_id, lte_id=lte_id, desc=desc, limit=limit
-        ):
-            # Convert Django model to domain model
-            yield position, to_domain_money_plan(plan)
 
     @transaction.atomic
     def archive_plan(self, plan_id: str) -> UseCaseResult[None]:
@@ -833,17 +521,17 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from the repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
             plan = plan_result.data
 
-            if plan.is_archived:
-                return UseCaseResult.failure(error=MoneyPlanError("Plan is already archived"))
+            # Use the domain model's archive_plan method
+            plan.archive_plan(datetime.now(timezone.utc))
 
-            plan.is_archived = True
-            plan.archived_at = datetime.now(timezone.utc)
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
             return UseCaseResult.success(message="Plan archived successfully")
@@ -866,19 +554,21 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
+            # Get the domain model from the repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
+            # Get the domain model
             plan = plan_result.data
 
-            # Check if plan is not archived
-            self._check_not_archived(plan)
+            # Use the domain model's edit_notes method
+            plan.edit_notes(notes)
 
-            plan.notes = notes
+            # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
-            return UseCaseResult.success()
+            return UseCaseResult.success(message="Plan notes updated successfully")
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:
@@ -899,31 +589,21 @@ class MoneyPlanUseCases:
             UseCaseResult indicating success or failure
         """
         try:
-            # Check if plan is not archived
+            # Get the domain model from the repository
             plan_result = self.get_plan(plan_id)
             if not plan_result.success:
                 return UseCaseResult.failure(error=plan_result.error)
 
+            # Get the domain model
             plan = plan_result.data
-            self._check_not_archived(plan)
 
-            # Convert to UUID for repository layer
-            plan_uuid = UUID(plan_id) if isinstance(plan_id, str) else plan_id
-            account_uuid = UUID(account_id) if isinstance(account_id, str) else account_id
+            # Use the domain model's edit_account_notes method
+            plan.edit_account_notes(account_id, notes)
 
-            try:
-                # Find the plan account
-                plan_account = PlanAccount.objects.get(plan_id=plan_uuid, account_id=account_uuid)
-            except PlanAccount.DoesNotExist:
-                return UseCaseResult.failure(
-                    error=AccountNotFoundError(f"Account with ID {account_id} not found")
-                )
+            # Save the updated domain model through the repository
+            self.money_plan_repo.save(plan)
 
-            # Update notes
-            plan_account.notes = notes
-            self.plan_account_repo.save(plan_account)
-
-            return UseCaseResult.success()
+            return UseCaseResult.success(message="Account notes updated successfully")
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:
@@ -968,41 +648,25 @@ class MoneyPlanUseCases:
 
             source_plan = source_plan_result.data
 
-            # Convert to Money
-            if isinstance(initial_balance, (float, str)):
-                initial_balance = Money(initial_balance)
+            # Generate a new ID for the plan
+            plan_id = generate_safe_cuid16()
 
-            # Convert str to UUID if needed for repository layer
-            UUID(source_plan_id) if isinstance(source_plan_id, str) else source_plan_id
-
-            # Create new plan
-            new_plan = self.money_plan_repo.create(
-                initial_balance=initial_balance.as_decimal, owner_id=self.user_id, notes=notes
+            # Use the domain model's copy_structure method
+            new_plan = DomainMoneyPlan.copy_structure(
+                id=plan_id,
+                source_plan=source_plan,
+                initial_balance=initial_balance,
+                created_at=datetime.now(timezone.utc),
+                plan_date=date.today(),
+                notes=notes,
             )
 
-            # Copy account structure
-            if source_plan.plan_accounts.exists():
-                for source_plan_account in source_plan.plan_accounts.all():
-                    # Create plan account
-                    plan_account = self.plan_account_repo.create(
-                        plan_id=new_plan.id, account_id=source_plan_account.account.id
-                    )
+            # Save the new plan through the repository
+            self.money_plan_repo.save(new_plan)
 
-                    # Create buckets with zero allocations
-                    for source_bucket in source_plan_account.buckets.all():
-                        self.bucket_repo.create(
-                            plan_account_id=plan_account.id,
-                            name=source_bucket.name,
-                            category=source_bucket.category,
-                            allocated_amount=0,  # Start with zero allocations
-                        )
+            logger.info(f"Copied plan structure from plan {source_plan_id} to new plan {plan_id}")
 
-                logger.info(
-                    f"Copied {source_plan.plan_accounts.count()} account structures "
-                    f"from plan {source_plan_id}"
-                )
-
-            return UseCaseResult.success(data=str(new_plan.id))
+            return UseCaseResult.success(data=plan_id)
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:

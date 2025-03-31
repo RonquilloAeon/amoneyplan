@@ -5,7 +5,6 @@ Money Plan aggregate root for the personal money management app.
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Dict, List, Optional, Union
-from uuid import UUID
 
 from amoneyplan.domain.account import Account, Bucket, PlanAccountAllocation
 from amoneyplan.domain.money import Money
@@ -68,26 +67,29 @@ class AccountAllocationConfig:
     Configuration for an account allocation in a Money Plan.
     """
 
-    account_id: UUID
+    account_id: str
     name: str
     buckets: List[BucketConfig]
 
 
-@dataclass(frozen=True)
+@dataclass
 class MoneyPlan:
-    def __init__(self):
-        self.initial_balance = Money(0)
-        self.remaining_balance = Money(0)
-        self.accounts: Dict[UUID, PlanAccountAllocation] = {}
-        self.notes = ""
-        self.committed = False
-        self.is_archived = False
-        self.created_at = None
-        self.plan_date = None
-        self.archived_at = None
+    id: str
+    initial_balance: Money
+    remaining_balance: Money
+    created_at: datetime
+    plan_date: date
 
+    accounts: Dict[str, PlanAccountAllocation] = field(default_factory=dict)
+    archived_at: Optional[datetime] = None
+    committed: bool = False
+    is_archived: bool = False
+    notes: str = ""
+
+    @classmethod
     def start_plan(
-        self,
+        cls,
+        id: str,
         initial_balance: Union[Money, float, str],
         created_at: Optional[datetime] = None,
         plan_date: Optional[date] = None,
@@ -104,16 +106,10 @@ class MoneyPlan:
             Money(initial_balance) if isinstance(initial_balance, (float, str, int)) else initial_balance
         )
 
-        self.initial_balance = balance
-        self.remaining_balance = Money(balance.as_float)  # Create a new Money instance
-        self.notes = notes
-        self.committed = False
-
-        # Handle backward compatibility for existing events
-        self.created_at = created_at
-        self.plan_date = plan_date
+        remaining_balance = Money(balance.as_float)
 
         # Process default allocations if provided
+        accounts = {}
         if default_allocations:
             for config in default_allocations:
                 account = Account(account_id=config.account_id, name=config.name)
@@ -128,14 +124,22 @@ class MoneyPlan:
                         )
                         account.buckets[bucket.bucket_name] = bucket
                         # Reduce the remaining balance by the allocated amount
-                        self.remaining_balance -= bucket_config.allocated_amount
+                        remaining_balance -= bucket_config.allocated_amount
 
                 # Add the account allocation to the plan
-                self.accounts[account.account_id] = PlanAccountAllocation(account=account)
+                accounts[account.account_id] = PlanAccountAllocation(account=account)
 
-    def allocate_funds(
-        self, account_id: Union[UUID, str], bucket_name: str, amount: Union[Money, float, str]
-    ):
+        return cls(
+            id=id,
+            initial_balance=balance,
+            remaining_balance=remaining_balance,
+            created_at=created_at,
+            plan_date=plan_date,
+            accounts=accounts,
+            notes=notes,
+        )
+
+    def allocate_funds(self, account_id: str, bucket_name: str, amount: Union[Money, float, str]):
         """
         Allocate funds to a bucket within an account.
 
@@ -154,9 +158,6 @@ class MoneyPlan:
 
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot allocate funds to a committed plan")
-
-        if isinstance(account_id, str):
-            account_id = UUID(account_id)
 
         if isinstance(amount, (float, str)):
             amount = Money(amount)
@@ -187,7 +188,7 @@ class MoneyPlan:
 
     def reverse_allocation(
         self,
-        account_id: Union[UUID, str],
+        account_id: str,
         bucket_name: str,
         original_amount: Union[Money, float, str],
         corrected_amount: Union[Money, float, str],
@@ -211,9 +212,6 @@ class MoneyPlan:
 
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot adjust allocations in a committed plan")
-
-        if isinstance(account_id, str):
-            account_id = UUID(account_id)
 
         if isinstance(original_amount, (float, str)):
             original_amount = Money(original_amount)
@@ -269,9 +267,7 @@ class MoneyPlan:
         self.initial_balance += adjustment
         self.remaining_balance += adjustment
 
-    def change_account_configuration(
-        self, account_id: Union[UUID, str], new_bucket_config: List[BucketConfig]
-    ):
+    def change_account_configuration(self, account_id: str, new_bucket_config: List[BucketConfig]):
         """
         Change the bucket configuration for an account.
 
@@ -287,12 +283,6 @@ class MoneyPlan:
 
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot change account configuration in a committed plan")
-
-        if isinstance(account_id, str):
-            try:
-                account_id = UUID(account_id)
-            except ValueError as e:
-                raise ValueError(f"Invalid UUID format for account ID: {e}")
 
         # Find the account
         if account_id not in self.accounts:
@@ -366,28 +356,31 @@ class MoneyPlan:
         # All invariants satisfied, commit the plan
         self.committed = True
 
-    def archive(self):
-        """
-        Archive the money plan, preventing further modifications.
-        Plans can be archived regardless of commitment status.
-
-        Raises:
-            MoneyPlanError: If the plan is already archived
-        """
+    def archive_plan(self, now: datetime):
+        """Archive the money plan, preventing further modifications."""
         if self.is_archived:
             raise MoneyPlanError("Plan is already archived")
 
         self.is_archived = True
-        self.archived_at = datetime.utcnow()
+        self.archived_at = now
+
+    def edit_plan_notes(self, notes: str):
+        """Edit the notes of the money plan."""
+        self.notes = notes
+
+    def _check_not_archived(self):
+        """Ensure the plan is not archived before making modifications."""
+        if self.is_archived:
+            raise MoneyPlanError("Cannot modify an archived plan")
 
     def add_account(
-        self, account_id: UUID, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None
+        self, account_id: str, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None
     ):
         """
         Add a new account to the plan.
 
         Args:
-            account_id: UUID for the account.
+            account_id: id for the account.
             name: The name of the account
             buckets: Optional list of bucket configurations, can be BucketConfig objects or dicts
 
@@ -432,7 +425,7 @@ class MoneyPlan:
         # Add the account to the plan
         self.accounts[account_id] = PlanAccountAllocation(account=account)
 
-    def set_account_checked_state(self, account_id: Union[UUID, str], is_checked: bool) -> None:
+    def set_account_checked_state(self, account_id: str, is_checked: bool) -> None:
         """
         Set the checked state of an account.
 
@@ -455,7 +448,7 @@ class MoneyPlan:
                 "Account is already checked" if is_checked else "Account is already unchecked"
             )
 
-    def remove_account(self, account_id: Union[UUID, str]):
+    def remove_account(self, account_id: str):
         """
         Remove an account from the plan.
 
@@ -470,9 +463,6 @@ class MoneyPlan:
 
         if self.committed:
             raise PlanAlreadyCommittedError("Cannot remove an account from a committed plan")
-
-        if isinstance(account_id, str):
-            account_id = UUID(account_id)
 
         # Find the account
         if account_id not in self.accounts:
@@ -498,7 +488,7 @@ class MoneyPlan:
         self._check_not_archived()
         self.notes = notes
 
-    def edit_account_notes(self, account_id: Union[UUID, str], notes: str):
+    def edit_account_notes(self, account_id: str, notes: str):
         """
         Edit the notes of an account.
 
@@ -511,9 +501,6 @@ class MoneyPlan:
             MoneyPlanError: If the plan is archived
         """
         self._check_not_archived()
-
-        if isinstance(account_id, str):
-            account_id = UUID(account_id)
 
         if account_id not in self.accounts:
             raise AccountNotFoundError(f"Account with ID {account_id} not found")

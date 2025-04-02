@@ -37,7 +37,7 @@
           <!-- Edit account notes button -->
           <button 
             v-if="!isArchived" 
-            @click.stop="$emit('edit-notes')" 
+            @click.stop="$emit('edit-notes', account)" 
             class="btn btn-ghost btn-xs btn-square"
             title="Edit account notes"
           >
@@ -47,7 +47,7 @@
           <!-- Edit account button -->
           <button 
             v-if="!isArchived && !isCommitted" 
-            @click.stop="$emit('edit-account')" 
+            @click.stop="$emit('edit-account', account)" 
             class="btn btn-ghost btn-xs btn-square"
             title="Edit account"
           >
@@ -57,7 +57,7 @@
           <!-- Delete account button -->
           <button 
             v-if="!isArchived && !isCommitted" 
-            @click.stop="$emit('remove-account')" 
+            @click.stop="$emit('remove-account', account)" 
             class="btn btn-ghost btn-xs btn-square"
             title="Remove account"
           >
@@ -74,7 +74,7 @@
             <input 
               type="checkbox" 
               :checked="isChecked" 
-              @change.stop="$emit('toggle-check')" 
+              @change.stop="$emit('toggle-check', account)" 
               class="checkbox checkbox-sm"
               :disabled="isArchived"
               :class="{ 'checkbox-success': isChecked }"
@@ -115,7 +115,7 @@
           </thead>
           <tbody>
             <tr v-for="bucket in buckets" :key="bucket.id">
-              <td>{{ bucket.name }}</td>
+              <td>{{ bucket.bucketName }}</td>
               <td>{{ bucket.category }}</td>
               <td>${{ bucket.allocatedAmount.toFixed(2) }}</td>
               <td>{{ calculateBucketPercentage(bucket) }}%</td>
@@ -141,7 +141,7 @@ import { ref, computed } from 'vue';
 
 interface Bucket {
   id: string;
-  name: string;
+  bucketName: string;
   allocatedAmount: number;
   category: string;
 }

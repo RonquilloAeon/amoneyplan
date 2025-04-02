@@ -46,28 +46,15 @@ const EDIT_ACCOUNT_NOTES_MUTATION = `
   mutation editAccountNotes($input: EditAccountNotesInput!) {
     moneyPlan {
       editAccountNotes(input: $input) {
-        success
-        error {
+        ... on Success {
+          message
+          data
+        }
+        ... on ApplicationError {
           message
         }
-        moneyPlan {
-          id
-          accounts {
-            id
-            name
-            notes
-            isChecked
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
-          }
-          initialBalance
-          remainingBalance
-          timestamp
-          isCommitted
-          isArchived
+        ... on UnexpectedError {
+          message
         }
       }
     }
@@ -100,17 +87,40 @@ async function saveNotes() {
       return;
     }
     
-    if (result.data?.moneyPlan?.editAccountNotes?.success) {
-      emit('notesSaved', result.data.moneyPlan.editAccountNotes.moneyPlan);
-    } else {
-      console.error('Failed to save account notes:', 
-        result.data?.moneyPlan?.editAccountNotes?.error?.message);
+    const response = result.data.moneyPlan.editAccountNotes;
+    
+    // Check if we got an error response
+    if (response.__typename === 'ApplicationError' || response.__typename === 'UnexpectedError') {
+      console.error('Failed to save account notes:', response.message);
+      return;
     }
+    
+    // Transform the data to match the frontend's expected structure
+    const transformedData = {
+      ...response.data,
+      planDate: response.data.plan_date,
+      isCommitted: response.data.is_committed,
+      isArchived: response.data.is_archived,
+      initialBalance: response.data.initial_balance,
+      remainingBalance: response.data.remaining_balance,
+      accounts: response.data.accounts.map(account => ({
+        ...account,
+        isChecked: account.is_checked,
+        buckets: account.buckets.map(bucket => ({
+          ...bucket,
+          bucketName: bucket.bucket_name,
+          allocatedAmount: bucket.allocated_amount
+        }))
+      }))
+    };
+    
+    // Success! Emit the transformed plan
+    emit('notesSaved', transformedData);
+    emit('close');
   } catch (e) {
     console.error('Error saving account notes:', e);
   } finally {
     isSaving.value = false;
-    emit('close');
   }
 }
 </script>

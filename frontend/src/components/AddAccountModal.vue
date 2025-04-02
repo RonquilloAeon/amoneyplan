@@ -12,9 +12,24 @@
       </div>
       
       <form @submit.prevent="addAccount">
+        <!-- Account selector -->
         <div class="form-control w-full mb-4">
-          <label class="label">
-            <span class="label-text">Account Name</span>
+          <label class="label py-1">
+            <span class="label-text">Account Selection</span>
+          </label>
+          <select 
+            v-model="selectedAccountMethod" 
+            class="select select-bordered w-full"
+          >
+            <option value="new">Create New Account</option>
+            <option value="existing">Use Existing Account</option>
+          </select>
+        </div>
+        
+        <!-- New account name input -->
+        <div v-if="selectedAccountMethod === 'new'" class="form-control w-full mb-4">
+          <label class="label py-1">
+            <span class="label-text">New Account Name</span>
           </label>
           <input 
             v-model="accountName" 
@@ -23,6 +38,23 @@
             class="input input-bordered w-full" 
             required 
           />
+        </div>
+        
+        <!-- Existing account selector -->
+        <div v-if="selectedAccountMethod === 'existing'" class="form-control w-full mb-4">
+          <label class="label py-1">
+            <span class="label-text">Select Existing Account</span>
+          </label>
+          <select 
+            v-model="selectedExistingAccountId" 
+            class="select select-bordered w-full"
+            required
+          >
+            <option disabled value="">Select an account</option>
+            <option v-for="account in availableAccounts" :key="account.id" :value="account.id">
+              {{ account.name }}
+            </option>
+          </select>
         </div>
         
         <div class="divider">Buckets</div>
@@ -112,6 +144,7 @@
             <input 
               v-model="bucket.allocatedAmount" 
               type="number" 
+              min="0"
               step="0.01"
               class="input input-bordered input-sm w-full" 
               required 
@@ -160,9 +193,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useMutation } from '@urql/vue';
+import { useMutation, useQuery } from '@urql/vue';
 import gql from 'graphql-tag';
 import { getClient } from '../graphql/moneyPlans';
+import logger from '../utils/logger';
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const emit = defineEmits(['close', 'accountAdded']);
@@ -194,6 +228,10 @@ onMounted(() => {
   });
 });
 
+// Account selection
+const selectedAccountMethod = ref('new');
+const selectedExistingAccountId = ref('');
+
 // Form state
 const accountName = ref('');
 const buckets = ref([
@@ -205,6 +243,23 @@ const buckets = ref([
 ]);
 const errorMessage = ref('');
 const isSaving = ref(false);
+
+// Fetch available accounts
+const ACCOUNTS_QUERY = gql`
+  query Accounts {
+    accounts {
+      id
+      name
+    }
+  }
+`;
+
+const { data: accountsData } = useQuery({
+  query: ACCOUNTS_QUERY,
+  client: () => getClient()
+});
+
+const availableAccounts = computed(() => accountsData.value?.accounts || []);
 
 // Computed remaining balance 
 const totalBucketAmount = computed(() => {
@@ -218,10 +273,19 @@ const remainingBalance = computed(() => {
 });
 
 const isValid = computed(() => {
-  return accountName.value.trim() !== '' && 
-    buckets.value.length > 0 && 
-    buckets.value.every(b => b.bucketName.trim() !== '' && b.category && b.allocatedAmount > 0) &&
-    remainingBalance.value >= 0;
+  // Basic form validation
+  const validAccountInfo = 
+    (selectedAccountMethod.value === 'new' && accountName.value.trim() !== '') || 
+    (selectedAccountMethod.value === 'existing' && !!selectedExistingAccountId.value);
+  
+  // Buckets validation - allow zero values but validate names and categories
+  const validBuckets = buckets.value.length > 0 && 
+    buckets.value.every(b => b.bucketName.trim() !== '' && b.category && b.allocatedAmount >= 0);
+  
+  // Overall balance validation
+  const validBalance = remainingBalance.value >= 0;
+  
+  return validAccountInfo && validBuckets && validBalance;
 });
 
 // Watch for changes in bucket amounts
@@ -250,28 +314,20 @@ function validateTotalAmount() {
   }
 }
 
-// GraphQL mutation
+// GraphQL mutation - Updated to match the backend schema
 const ADD_ACCOUNT_MUTATION = gql`
   mutation addAccount($input: AddAccountInput!) {
     moneyPlan {
       addAccount(input: $input) {
-        error {
+        ... on Success {
+          message
+          data
+        }
+        ... on ApplicationError {
           message
         }
-        success
-        moneyPlan {
-          id
-          accounts {
-            name
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
-          }
-          initialBalance
-          remainingBalance
-          timestamp
+        ... on UnexpectedError {
+          message
         }
       }
     }
@@ -287,36 +343,47 @@ async function addAccount() {
   errorMessage.value = '';
 
   try {
+    // Construct mutation input based on whether we're using a new or existing account
     const variables = { 
       input: {
-        name: accountName.value,
+        planId: props.planId,
+        name: selectedAccountMethod.value === 'new' ? accountName.value : undefined,
+        accountId: selectedAccountMethod.value === 'existing' ? selectedExistingAccountId.value : undefined,
         buckets: buckets.value.map(b => ({
           bucketName: b.bucketName,
           allocatedAmount: Number(b.allocatedAmount),
           category: b.category
-        })),
-        planId: props.planId
+        }))
       }
     };
+    
+    logger.debug('AddAccount', 'Executing mutation with variables', variables);
     
     const response = await executeMutation(variables);
     
     if (response.error) {
+      logger.error('AddAccount', 'GraphQL error', response.error);
       errorMessage.value = response.error.message;
       return;
     }
     
-    if (response.data.moneyPlan.addAccount.error) {
-      errorMessage.value = response.data.moneyPlan.addAccount.error.message;
+    const result = response.data.moneyPlan.addAccount;
+    
+    // Check if we got an error response
+    if (result.__typename === 'ApplicationError' || result.__typename === 'UnexpectedError') {
+      logger.error('AddAccount', 'Error response', result);
+      errorMessage.value = result.message;
       return;
     }
     
     // Success! Reset form and emit events
-    emit('accountAdded', response.data.moneyPlan.addAccount.moneyPlan);
+    logger.info('AddAccount', 'Account added successfully', result);
+    emit('accountAdded', result.data);
     if (dialogRef.value) {
       dialogRef.value.close();
     }
   } catch (error) {
+    logger.error('AddAccount', 'Exception', error);
     errorMessage.value = (error as Error).message;
   } finally {
     isSaving.value = false;
@@ -324,6 +391,8 @@ async function addAccount() {
 }
 
 function resetForm() {
+  selectedAccountMethod.value = 'new';
+  selectedExistingAccountId.value = '';
   accountName.value = '';
   buckets.value = [{
     bucketName: '',

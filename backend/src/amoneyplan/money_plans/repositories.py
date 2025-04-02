@@ -41,7 +41,7 @@ def to_domain_account(account: Account, plan_account: PlanAccount, buckets: List
 
 def to_domain_plan_account_allocation(plan_account: PlanAccount) -> PlanAccountAllocation:
     """Convert a Django PlanAccount model to a domain PlanAccountAllocation object."""
-    buckets = plan_account.buckets.all()
+    buckets = plan_account.buckets.all().order_by("created_at")
     account = plan_account.account
 
     domain_account = to_domain_account(account, plan_account, buckets)
@@ -58,7 +58,9 @@ def to_domain_money_plan(plan: MoneyPlan) -> DomainMoneyPlan:
     # Convert accounts and buckets
     accounts = {}
 
-    for plan_account in plan.plan_accounts.all().select_related("account").prefetch_related("buckets"):
+    for plan_account in (
+        plan.plan_accounts.all().order_by("created_at").select_related("account").prefetch_related("buckets")
+    ):
         account_id = plan_account.account.id
         accounts[account_id] = to_domain_plan_account_allocation(plan_account)
 

@@ -108,6 +108,8 @@
                 v-for="account in draftPlan.accounts" 
                 :key="account.id"
                 :account="account"
+                :buckets="account.buckets"
+                :is-checked="account.isChecked"
                 :plan-initial-balance="draftPlan.initialBalance"
                 :is-archived="draftPlan.isArchived"
                 :is-committed="draftPlan.isCommitted"
@@ -204,6 +206,16 @@
         <span>{{ toast.message }}</span>
       </div>
     </div>
+    
+    <ConfirmDialog
+      :is-open="showConfirmDialog"
+      title="Remove Account"
+      :message="`Are you sure you want to remove the account '${accountToRemove?.name}'? All buckets and allocations will be returned to the remaining balance.`"
+      confirm-text="Remove Account"
+      :is-loading="isRemovingAccount"
+      @close="showConfirmDialog = false"
+      @confirm="removeAccount"
+    />
   </div>
 </template>
 
@@ -228,6 +240,7 @@ import {
   SET_ACCOUNT_CHECKED_MUTATION,
   getClient
 } from '../graphql/moneyPlans';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 interface Bucket {
   bucketName: string;
@@ -274,6 +287,9 @@ const toast = ref<Toast>({
   message: '',
   type: 'alert-info'
 });
+const showConfirmDialog = ref(false);
+const accountToRemove = ref<Account | null>(null);
+const isRemovingAccount = ref(false);
 
 const { data, error, executeQuery } = useQuery({
   query: DRAFT_MONEY_PLAN_QUERY,
@@ -321,10 +337,10 @@ const addPlan = (_newPlan: MoneyPlan) => {
   executeQuery({ requestPolicy: 'network-only' });
 };
 
-function handleAccountAdded(updatedPlan: MoneyPlan) {
+function handleAccountAdded(updatedPlanData: any) {
   // Force refresh from network to get the updated plan
   executeQuery({ requestPolicy: 'network-only' });
-  showToast('Account updated successfully', 'alert-success');
+  showToast('Account added successfully', 'alert-success');
 }
 
 // Calculate the total amount allocated for an account
@@ -390,8 +406,8 @@ async function archivePlan() {
     });
     if (result.data?.moneyPlan?.archivePlan?.success) {
       showToast('Plan archived successfully', 'alert-success');
-      // Clear the plans list since archived plan is no longer a draft
-      moneyPlans.value = [];
+      // Clear the draft plan
+      draftPlan.value = null;
       // Refresh the query to make sure we get any other draft plans
       executeQuery();
     } else {
@@ -417,14 +433,19 @@ function closeEditModal() {
 }
 
 async function confirmRemoveAccount(account: Account) {
-  const confirmed = window.confirm(`Are you sure you want to remove the account "${account.name}"? All buckets and allocations will be returned to the remaining balance.`);
-  if (!confirmed) return;
+  accountToRemove.value = account;
+  showConfirmDialog.value = true;
+}
+
+async function removeAccount() {
+  if (!accountToRemove.value || !draftPlan.value) return;
   
+  isRemovingAccount.value = true;
   try {
     const result = await executeRemoveAccount({
       input: {
         planId: draftPlan.value.id,
-        accountId: account.id,
+        accountId: accountToRemove.value.id,
       }
     });
     
@@ -441,10 +462,14 @@ async function confirmRemoveAccount(account: Account) {
     if (result.data?.moneyPlan?.removeAccount?.success) {
       const updatedPlan = result.data.moneyPlan.removeAccount.moneyPlan;
       handleAccountAdded(updatedPlan); // Reuse existing function to update the plan
-      showToast(`Account "${account.name}" removed successfully`, 'alert-success');
+      showToast(`Account "${accountToRemove.value.name}" removed successfully`, 'alert-success');
     }
   } catch (error) {
     showToast((error as Error).message, 'alert-error');
+  } finally {
+    isRemovingAccount.value = false;
+    showConfirmDialog.value = false;
+    accountToRemove.value = null;
   }
 }
 
@@ -468,8 +493,9 @@ async function toggleAccountCheck(account: Account) {
       return;
     }
     
-    if (result.data?.moneyPlan?.setAccountCheckedState?.success) {
-      const updatedPlan = result.data.moneyPlan.setAccountCheckedState.moneyPlan;
+    const response = result.data?.moneyPlan?.setAccountCheckedState;
+    if (response?.__typename === 'Success') {
+      const updatedPlan = response.data;
       handleAccountAdded(updatedPlan);
       
       // Show a toast based on the new state
@@ -478,8 +504,7 @@ async function toggleAccountCheck(account: Account) {
         `Checked account: ${account.name}`;
       showToast(message, 'alert-success');
     } else {
-      const errorMessage = result.data?.moneyPlan?.setAccountCheckedState?.error?.message || 
-        'Failed to update account status';
+      const errorMessage = response?.message || 'Failed to update account status';
       showToast(errorMessage, 'alert-error');
     }
   } catch (e) {
@@ -489,11 +514,10 @@ async function toggleAccountCheck(account: Account) {
 }
 
 function handlePlanNotesUpdated(updatedPlan: MoneyPlan) {
-  // Find and update the plan in our list
-  const index = moneyPlans.value.findIndex(plan => plan.id === updatedPlan.id);
-  if (index !== -1) {
-    moneyPlans.value[index] = {
-      ...moneyPlans.value[index],
+  // Update the draft plan
+  if (draftPlan.value && draftPlan.value.id === updatedPlan.id) {
+    draftPlan.value = {
+      ...draftPlan.value,
       notes: updatedPlan.notes
     };
   }
@@ -501,10 +525,9 @@ function handlePlanNotesUpdated(updatedPlan: MoneyPlan) {
 }
 
 function handleAccountNotesUpdated(updatedPlan: MoneyPlan) {
-  // Find and update the plan in our list
-  const index = moneyPlans.value.findIndex(plan => plan.id === updatedPlan.id);
-  if (index !== -1) {
-    moneyPlans.value[index] = updatedPlan;
+  // Update the draft plan
+  if (draftPlan.value && draftPlan.value.id === updatedPlan.id) {
+    draftPlan.value = updatedPlan;
   }
   showToast('Account notes updated successfully', 'alert-success');
 }

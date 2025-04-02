@@ -17,6 +17,18 @@
             required 
           />
         </div>
+
+        <div class="form-control w-full mb-3 md:mb-4">
+          <label class="label py-1">
+            <span class="label-text text-sm md:text-base">Plan Date</span>
+          </label>
+          <input 
+            v-model="planDate" 
+            type="date" 
+            class="input input-bordered input-sm md:input-md w-full" 
+            required 
+          />
+        </div>
         
         <div class="form-control w-full mb-3 md:mb-4">
           <label class="label py-1">
@@ -52,65 +64,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useMutation } from '@urql/vue';
-import gql from 'graphql-tag';
+import { ref, onMounted } from 'vue';
+import { CREATE_MONEY_PLAN, DRAFT_MONEY_PLAN_QUERY, getClient } from '../graphql/moneyPlans';
 import CopyFromSelect from './CopyFromSelect.vue';
 
 const emit = defineEmits(['close', 'planCreated']);
 
-const START_PLAN_MUTATION = gql`
-  mutation StartPlan($input: PlanStartInput!) {
-    moneyPlan {
-      startPlan(input: $input) {
-        error {
-          message
-        }
-        success
-        moneyPlan {
-          id
-          planDate
-          notes
-          accounts {
-            name
-            buckets {
-              bucketName
-              allocatedAmount
-            }
-          }
-          isCommitted
-          isArchived
-          initialBalance
-          remainingBalance
-        }
-      }
-    }
-  }
-`;
-
 const initialBalance = ref(0);
 const notes = ref('');
 const selectedPlanId = ref('');
-const { executeMutation } = useMutation(START_PLAN_MUTATION);
+const planDate = ref(new Date().toISOString().split('T')[0]); // Default to today's date
 
 const startPlan = async () => {
   const variables = { 
     input: { 
       initialBalance: initialBalance.value, 
       notes: notes.value,
-      copyFrom: selectedPlanId.value ? selectedPlanId.value : null
+      copyFrom: selectedPlanId.value ? selectedPlanId.value : null,
+      planDate: planDate.value
     } 
   };
   
-  const response = await executeMutation(variables);
+  const client = getClient();
+  const response = await client.mutation(CREATE_MONEY_PLAN, variables).toPromise();
+  
   if (!response.error) {
-    // Emit the new plan to the parent component
-    emit('planCreated', response.data.moneyPlan.startPlan.moneyPlan);
-    emit('close');
+    const result = response.data?.moneyPlan?.startPlan;
+    if (result?.__typename === 'Success') {
+      // Fetch the draft plan to get the full data
+      const draftClient = getClient(); // Get a fresh client instance
+      const draftResponse = await draftClient.query(DRAFT_MONEY_PLAN_QUERY).toPromise();
+      if (!draftResponse.error && draftResponse.data?.draftMoneyPlan) {
+        // Emit the new plan to the parent component
+        emit('planCreated', draftResponse.data.draftMoneyPlan);
+        emit('close');
+      } else {
+        console.error('Failed to fetch draft plan:', draftResponse.error);
+      }
+    } else {
+      console.error('Failed to create plan:', result?.message);
+    }
   } else {
     console.error(response.error);
   }
 };
+
+// Reset form when modal opens
+onMounted(() => {
+  initialBalance.value = 0;
+  notes.value = '';
+  selectedPlanId.value = '';
+  planDate.value = new Date().toISOString().split('T')[0];
+});
 </script>
 
 <style scoped>

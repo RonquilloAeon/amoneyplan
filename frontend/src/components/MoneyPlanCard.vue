@@ -96,6 +96,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useMutation } from '@urql/vue';
+import { getClient } from '../graphql/moneyPlans';
 import PlanDate from './PlanDate.vue';
 import EditPlanNotesModal from './EditPlanNotesModal.vue';
 import EditAccountNotesModal from './EditAccountNotesModal.vue';
@@ -183,8 +184,12 @@ const SET_ACCOUNT_CHECKED_MUTATION = gql`
   }
 `;
 
-const { executeMutation } = useMutation(ARCHIVE_PLAN_MUTATION);
-const { executeMutation: executeAccountCheckMutation } = useMutation(SET_ACCOUNT_CHECKED_MUTATION);
+const { executeMutation } = useMutation(ARCHIVE_PLAN_MUTATION, {
+  client: () => getClient()
+});
+const { executeMutation: executeAccountCheckMutation } = useMutation(SET_ACCOUNT_CHECKED_MUTATION, {
+  client: () => getClient()
+});
 
 function getBadgeClass() {
   if (props.plan.isArchived) return 'badge-ghost';

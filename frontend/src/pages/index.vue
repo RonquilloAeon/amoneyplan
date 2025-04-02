@@ -2,8 +2,8 @@
   <div class="min-h-screen bg-base-200">
     <!-- Hero section with title -->
     <PageHeader 
-      title="Money planning made simple"
-      subtitle="Manage your finances with smart money plans"
+      title="Make a Plan"
+      subtitle="Create and manage your money plan"
       :centered="true"
     />
 
@@ -219,6 +219,15 @@ import EditAccountNotesModal from '../components/EditAccountNotesModal.vue';
 import PageHeader from '../components/PageHeader.vue';
 import PlanDate from '../components/PlanDate.vue';
 import AccountCard from '../components/AccountCard.vue';
+import logger from '../utils/logger';
+import { 
+  DRAFT_MONEY_PLAN_QUERY, 
+  COMMIT_PLAN_MUTATION,
+  ARCHIVE_PLAN_MUTATION,
+  REMOVE_ACCOUNT_MUTATION,
+  SET_ACCOUNT_CHECKED_MUTATION,
+  getClient
+} from '../graphql/moneyPlans';
 
 interface Bucket {
   bucketName: string;
@@ -251,91 +260,13 @@ interface Toast {
   type: string;
 }
 
-const ARCHIVE_PLAN = `
-  mutation archivePlan($input: ArchivePlanInput!) {
-    moneyPlan {
-      archivePlan(input: $input) {
-        error {
-          message
-        }
-        success
-        moneyPlan {
-          isArchived
-        }
-      }
-    }
-  }
-`;
-
-const REMOVE_ACCOUNT_MUTATION = `
-  mutation removeAccount($input: RemoveAccountInput!) {
-    moneyPlan {
-      removeAccount(input: $input) {
-        error {
-          message
-        }
-        success
-        moneyPlan {
-          id
-          accounts {
-            id
-            name
-            notes
-            isChecked
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
-          }
-          initialBalance
-          remainingBalance
-          planDate
-          notes
-        }
-      }
-    }
-  }
-`;
-
-const SET_ACCOUNT_CHECKED_MUTATION = `
-  mutation setAccountCheckedState($input: SetAccountCheckedStateInput!) {
-    moneyPlan {
-      setAccountCheckedState(input: $input) {
-        success
-        error {
-          message
-        }
-        moneyPlan {
-          id
-          accounts {
-            id
-            name
-            isChecked
-            notes
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
-          }
-          initialBalance
-          remainingBalance
-          planDate
-          notes
-        }
-      }
-    }
-  }
-`;
-
 const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
 const showEditAccountModal = ref(false);
 const showEditPlanNotes = ref(false);
 const accountToEdit = ref<Account | null>(null);
 const accountForNotes = ref<Account | null>(null);
-const moneyPlans = ref<MoneyPlan[]>([]);
+const draftPlan = ref<MoneyPlan | null>(null);
 const isCommittingPlan = ref(false);
 const isArchivingPlan = ref(false);
 const toast = ref<Toast>({
@@ -344,88 +275,43 @@ const toast = ref<Toast>({
   type: 'alert-info'
 });
 
-// Computed property to get the first draft plan (if any)
-const draftPlan = computed(() => {
-  return moneyPlans.value.find(plan => !plan.isCommitted && !plan.isArchived);
-});
-
-const GET_MONEY_PLANS = `
-  query moneyPlans($filter: MoneyPlanFilter) {
-    moneyPlans(filter: $filter) {
-      pageInfo {
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges {
-        node {
-          id
-          planDate
-          accounts {
-            id
-            name
-            notes
-            isChecked
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
-          }
-          isCommitted
-          isArchived
-          initialBalance
-          remainingBalance
-          notes
-        }
-      }
-    }
-  }
-`;
-
-const COMMIT_PLAN = `
-  mutation commitPlan($input: CommitPlanInput!) {
-    moneyPlan {
-      commitPlan(input: $input) {
-        error {
-          message
-        }
-        success
-        moneyPlan {
-          isCommitted
-        }
-      }
-    }
-  }
-`;
-
 const { data, error, executeQuery } = useQuery({
-  query: GET_MONEY_PLANS,
-  variables: { 
-    filter: {
-      isArchived: false // Only show non-archived plans
-    }
-  },
-  requestPolicy: 'cache-and-network'
+  query: DRAFT_MONEY_PLAN_QUERY,
+  requestPolicy: 'cache-and-network',
+  client: () => getClient()
 });
 
-const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN);
-const { executeMutation: executeArchivePlan } = useMutation(ARCHIVE_PLAN);
-const { executeMutation: executeRemoveAccount } = useMutation(REMOVE_ACCOUNT_MUTATION);
-const { executeMutation: executeAccountCheckMutation } = useMutation(SET_ACCOUNT_CHECKED_MUTATION);
+const { executeMutation: executeCommitPlan } = useMutation(COMMIT_PLAN_MUTATION, {
+  client: () => getClient()
+});
+const { executeMutation: executeArchivePlan } = useMutation(ARCHIVE_PLAN_MUTATION, {
+  client: () => getClient()
+});
+const { executeMutation: executeRemoveAccount } = useMutation(REMOVE_ACCOUNT_MUTATION, {
+  client: () => getClient()
+});
+const { executeMutation: executeAccountCheckMutation } = useMutation(SET_ACCOUNT_CHECKED_MUTATION, {
+  client: () => getClient()
+});
 
 watchEffect(() => {
   if (data.value) {
-    moneyPlans.value = data.value.moneyPlans.edges.map((edge: { node: MoneyPlan }) => edge.node);
+    logger.info('DraftPlan', 'Draft plan data received', { hasData: !!data.value.draftMoneyPlan });
+    draftPlan.value = data.value.draftMoneyPlan;
   }
   if (error.value) {
-    console.error(error.value);
-    showToast('Failed to load money plans', 'alert-error');
+    logger.error('DraftPlan', 'Error loading draft plan', error.value);
+    showToast('Failed to load draft plan', 'alert-error');
   }
 });
 
 onMounted(() => {
-  executeQuery();
+  logger.info('DraftPlan', 'Component mounted, executing draft plan query...');
+  executeQuery().then(() => {
+    logger.info('DraftPlan', 'Initial query completed');
+  }).catch(err => {
+    logger.error('DraftPlan', 'Error executing initial query', err);
+  });
 });
 
 const addPlan = (_newPlan: MoneyPlan) => {
@@ -436,11 +322,8 @@ const addPlan = (_newPlan: MoneyPlan) => {
 };
 
 function handleAccountAdded(updatedPlan: MoneyPlan) {
-  // Find and update the plan in our list
-  const index = moneyPlans.value.findIndex(plan => plan.id === updatedPlan.id);
-  if (index !== -1) {
-    moneyPlans.value[index] = updatedPlan;
-  }
+  // Force refresh from network to get the updated plan
+  executeQuery({ requestPolicy: 'network-only' });
   showToast('Account updated successfully', 'alert-success');
 }
 

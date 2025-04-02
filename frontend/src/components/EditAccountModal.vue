@@ -166,6 +166,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useMutation, useQuery } from '@urql/vue';
 import gql from 'graphql-tag';
 import { ACCOUNTS_QUERY } from '../graphql/queries';
+import { getClient } from '../graphql/moneyPlans';
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const emit = defineEmits(['close', 'accountUpdated']);
@@ -303,7 +304,9 @@ const CHANGE_ACCOUNT_CONFIGURATION_MUTATION = gql`
   }
 `;
 
-const [{ error: mutationError }, executeMutation] = useMutation(CHANGE_ACCOUNT_CONFIGURATION_MUTATION);
+const [{ error: mutationError }, executeMutation] = useMutation(CHANGE_ACCOUNT_CONFIGURATION_MUTATION, {
+  client: () => getClient()
+});
 
 async function updateAccount() {
   if (!isValid.value) return;
@@ -373,7 +376,9 @@ const SET_ACCOUNT_CHECKED_STATE_MUTATION = gql`
   }
 `;
 
-const { executeMutation: executeSetCheckedState } = useMutation(SET_ACCOUNT_CHECKED_STATE_MUTATION);
+const { executeMutation: executeSetCheckedState } = useMutation(SET_ACCOUNT_CHECKED_STATE_MUTATION, {
+  client: () => getClient()
+});
 
 async function toggleAccountCheck() {
   try {

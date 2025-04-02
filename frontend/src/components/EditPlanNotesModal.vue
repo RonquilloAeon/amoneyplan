@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useMutation } from '@urql/vue';
+import { getClient } from '../graphql/moneyPlans';
 
 const props = defineProps<{
   planId: string;
@@ -55,7 +56,9 @@ const EDIT_PLAN_NOTES_MUTATION = `
   }
 `;
 
-const { executeMutation } = useMutation(EDIT_PLAN_NOTES_MUTATION);
+const { executeMutation } = useMutation(EDIT_PLAN_NOTES_MUTATION, {
+  client: () => getClient()
+});
 
 function cancel() {
   emit('close');

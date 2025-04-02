@@ -10,6 +10,7 @@ import type { User } from './stores/auth';
 const showLogin = ref(true);
 const authStore = useAuthStore();
 const router = useRouter();
+const isDebugMode = import.meta.env.VITE_DEBUG === 'true';
 
 async function handleAuthSuccess(user: User) {
   await authStore.setUser(user);
@@ -41,7 +42,7 @@ async function handleLogout() {
     </template>
     <template v-else>
       <header>
-        <PageHeader>
+        <PageHeader title="Money Planner">
           <template #right>
             <div class="user-info">
               Welcome, {{ authStore.user.firstName }}
@@ -88,6 +89,9 @@ async function handleLogout() {
             <li><RouterLink to="/plans" class="font-medium">Plans</RouterLink></li>
           </ul>
         </div>
+      </div>
+      <div v-if="isDebugMode" class="fixed bottom-2 left-2 p-2 bg-info text-info-content text-xs rounded shadow-lg opacity-70 z-50">
+        Debug Mode: Press F12 to see logs
       </div>
     </template>
   </div>

@@ -10,22 +10,14 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useMutation } from '@urql/vue';
-import { createClient, cacheExchange, fetchExchange } from '@urql/core';
 import { GOOGLE_AUTH_CALLBACK, ME_QUERY } from '../graphql/auth';
+import { getClient } from '../graphql/moneyPlans';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const error = ref('');
-const { executeMutation: googleCallback } = useMutation(GOOGLE_AUTH_CALLBACK);
-const client = createClient({
-  url: import.meta.env.VITE_GRAPHQL_URL,
-  exchanges: [cacheExchange, fetchExchange],
-  fetchOptions: () => {
-    const token = localStorage.getItem('token');
-    return {
-      headers: { authorization: token ? `Bearer ${token}` : '' },
-    };
-  },
+const { executeMutation: googleCallback } = useMutation(GOOGLE_AUTH_CALLBACK, {
+  client: getClient()
 });
 
 onMounted(async () => {
@@ -42,7 +34,14 @@ onMounted(async () => {
     const result = await googleCallback({ code });
     
     if (result.data?.auth?.googleCallback?.success) {
+      // Store the token in localStorage
+      const token = result.data.auth.googleCallback.token;
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+      
       // Fetch user data using ME_QUERY
+      const client = getClient();
       const userResult = await client.query(ME_QUERY);
       if (userResult.data?.me) {
         // Update the auth store with the user data

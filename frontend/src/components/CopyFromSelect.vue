@@ -70,7 +70,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue';
 import { useQuery } from '@urql/vue';
-import { PLANS_FOR_COPY } from '../graphql/queries';
+import { MONEY_PLANS_QUERY } from '../graphql/moneyPlans';
 
 const props = defineProps<{
   modelValue: string;
@@ -92,8 +92,13 @@ const loadingMore = ref(false);
 const dropdownRef = ref<HTMLElement | null>(null);
 
 const { data, fetching: loading, executeQuery } = useQuery({
-  query: PLANS_FOR_COPY,
-  variables: { first: 10 },
+  query: MONEY_PLANS_QUERY,
+  variables: { 
+    filter: {
+      isArchived: false // Only show non-archived plans
+    },
+    first: 10 
+  },
   pause: true, // Don't fetch immediately
 });
 

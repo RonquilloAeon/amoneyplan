@@ -162,6 +162,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useMutation } from '@urql/vue';
 import gql from 'graphql-tag';
+import { getClient } from '../graphql/moneyPlans';
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const emit = defineEmits(['close', 'accountAdded']);
@@ -277,7 +278,9 @@ const ADD_ACCOUNT_MUTATION = gql`
   }
 `;
 
-const { executeMutation } = useMutation(ADD_ACCOUNT_MUTATION);
+const { executeMutation } = useMutation(ADD_ACCOUNT_MUTATION, {
+  client: () => getClient()
+});
 
 async function addAccount() {
   isSaving.value = true;

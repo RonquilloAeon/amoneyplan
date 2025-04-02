@@ -9,6 +9,7 @@ from strawberry_django.optimizer import DjangoOptimizerExtension
 
 from amoneyplan.accounts.schema import AuthMutations, AuthQueries
 from amoneyplan.common import graphql as graphql_common
+from amoneyplan.common.permissions import IsAuthenticated
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import (
     AccountAllocationConfig,
@@ -338,6 +339,22 @@ class Query(AuthQueries):
             return []
 
     @strawberry.field
+    def draft_money_plan(self, info: Info) -> Optional[MoneyPlan]:
+        """
+        Get the current draft money plan for the authenticated user.
+        Returns None if no draft plan exists.
+        """
+        if not info.context.request.user.is_authenticated:
+            return None
+
+        use_case = MoneyPlanUseCases()
+        plan_result = use_case.get_current_plan()
+
+        if plan_result.success and plan_result.has_data():
+            return MoneyPlan.from_domain(plan_result.data)
+        return None
+
+    @strawberry.field
     def money_plan(self, info: Info, plan_id: Optional[relay.GlobalID] = None) -> Optional[MoneyPlan]:
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
@@ -480,7 +497,7 @@ class Query(AuthQueries):
 # GraphQL mutations
 @strawberry.type
 class MoneyPlanMutations:
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     @graphql_common.gql_error_handler
     def start_plan(self, info: Info, input: PlanStartInput) -> graphql_common.MutationResponse:
         """
@@ -531,7 +548,7 @@ class MoneyPlanMutations:
         except PlanAlreadyCommittedError as e:
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def allocate_funds(self, info: Info, input: AllocateFundsInput) -> graphql_common.MutationResponse:
         """
         Allocate funds to a bucket within an account.
@@ -561,7 +578,7 @@ class MoneyPlanMutations:
         except (MoneyPlanError, ValueError) as e:
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def adjust_plan_balance(
         self, info: Info, input: PlanBalanceAdjustInput
     ) -> graphql_common.MutationResponse:
@@ -591,7 +608,7 @@ class MoneyPlanMutations:
         except (MoneyPlanError, ValueError) as e:
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def change_account_configuration(
         self, info: Info, input: AccountConfigurationChangeInput
     ) -> graphql_common.MutationResponse:
@@ -625,7 +642,7 @@ class MoneyPlanMutations:
         except (MoneyPlanError, ValueError) as e:
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def add_account(self, info: Info, input: AddAccountInput) -> graphql_common.MutationResponse:
         """
         Add an account to a Money Plan.
@@ -681,7 +698,7 @@ class MoneyPlanMutations:
             logger.error(f"Error adding account: {e}", exc_info=True)
             return graphql_common.ApplicationError(message=f"An unexpected error occurred: {str(e)}")
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def commit_plan(self, info: Info, input: CommitPlanInput) -> graphql_common.MutationResponse:
         """
         Commit a Money Plan.
@@ -711,7 +728,7 @@ class MoneyPlanMutations:
             message="Your money plan was committed successfully",
         )
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def archive_plan(self, info: Info, input: ArchivePlanInput) -> graphql_common.MutationResponse:
         """Archive a money plan to prevent further modifications."""
         try:
@@ -736,7 +753,7 @@ class MoneyPlanMutations:
             logger.error("Error archiving plan: %s", str(e), exc_info=True)
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def remove_account(self, info: Info, input: RemoveAccountInput) -> graphql_common.MutationResponse:
         """Remove an account from a Money Plan."""
         use_case = MoneyPlanUseCases()
@@ -764,7 +781,7 @@ class MoneyPlanMutations:
             logger.error(f"Error removing account: {e}", exc_info=True)
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def set_account_checked_state(
         self, info: Info, input: SetAccountCheckedStateInput
     ) -> graphql_common.MutationResponse:
@@ -795,7 +812,7 @@ class MoneyPlanMutations:
             logger.error(f"Error setting account checked state: {e}", exc_info=True)
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def edit_plan_notes(self, info: Info, input: EditPlanNotesInput) -> graphql_common.MutationResponse:
         """
         Edit the notes of a plan.
@@ -826,7 +843,7 @@ class MoneyPlanMutations:
         except (MoneyPlanError, ValueError) as e:
             return graphql_common.ApplicationError(message=str(e))
 
-    @strawberry.mutation
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
     def edit_account_notes(self, info: Info, input: EditAccountNotesInput) -> graphql_common.MutationResponse:
         """
         Edit the notes of an account.

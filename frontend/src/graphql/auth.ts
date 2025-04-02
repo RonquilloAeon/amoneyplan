@@ -38,6 +38,8 @@ export const GOOGLE_AUTH_URL = gql`
   mutation GoogleAuthUrl {
     auth {
       googleAuthUrl {
+        success
+        error
         authUrl
       }
     }
@@ -50,6 +52,7 @@ export const GOOGLE_AUTH_CALLBACK = gql`
       googleCallback(code: $code) {
         success
         error
+        token
       }
     }
   }

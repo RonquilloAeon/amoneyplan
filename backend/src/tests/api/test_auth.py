@@ -93,11 +93,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         variables = {"input": {"initialBalance": 1000.0, "notes": "Test plan without auth"}}
         result = self.execute_query(client, create_plan_mutation, user=None, variables=variables)
 
-        # Response should indicate an error or failure
-        assert "startPlan" in result["moneyPlan"]
-        # The exact error format will depend on your API design,
-        # but the key point is that a plan shouldn't be created
-        assert "data" not in result["moneyPlan"]["startPlan"]
+        assert result is None
 
     def test_user_cannot_see_another_users_money_plans(self, client: Client):
         """Test that one user cannot see another user's money plans."""

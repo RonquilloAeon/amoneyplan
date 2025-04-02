@@ -9,7 +9,7 @@
           <span class="text-lg md:text-xl font-bold text-primary">${{ formattedAccountTotal }}</span>
           <span 
             class="font-medium text-sm md:text-base"
-            :class="{ 'line-through opacity-70': account.isChecked }"
+            :class="{ 'line-through opacity-70': isChecked }"
           >
             {{ account.name }}
           </span>
@@ -37,7 +37,7 @@
           <!-- Edit account notes button -->
           <button 
             v-if="!isArchived" 
-            @click.stop="$emit('edit-notes', account)" 
+            @click.stop="$emit('edit-notes')" 
             class="btn btn-ghost btn-xs btn-square"
             title="Edit account notes"
           >
@@ -47,7 +47,7 @@
           <!-- Edit account button -->
           <button 
             v-if="!isArchived && !isCommitted" 
-            @click.stop="$emit('edit-account', account)" 
+            @click.stop="$emit('edit-account')" 
             class="btn btn-ghost btn-xs btn-square"
             title="Edit account"
           >
@@ -57,7 +57,7 @@
           <!-- Delete account button -->
           <button 
             v-if="!isArchived && !isCommitted" 
-            @click.stop="$emit('remove-account', account)" 
+            @click.stop="$emit('remove-account')" 
             class="btn btn-ghost btn-xs btn-square"
             title="Remove account"
           >
@@ -73,11 +73,11 @@
           >
             <input 
               type="checkbox" 
-              :checked="account.isChecked" 
-              @change.stop="$emit('toggle-check', account)" 
+              :checked="isChecked" 
+              @change.stop="$emit('toggle-check')" 
               class="checkbox checkbox-sm"
               :disabled="isArchived"
-              :class="{ 'checkbox-success': account.isChecked }"
+              :class="{ 'checkbox-success': isChecked }"
             />
           </label>
         </div>
@@ -103,7 +103,7 @@
       </div>
       
       <!-- Only show table if buckets exist -->
-      <div v-if="account.buckets && account.buckets.length > 0" class="overflow-x-auto p-2">
+      <div v-if="buckets && buckets.length > 0" class="overflow-x-auto p-2">
         <table class="table table-zebra text-xs md:text-sm w-full">
           <thead>
             <tr>
@@ -114,9 +114,9 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="bucket in account.buckets" :key="bucket.bucketName">
-              <td>{{ bucket.bucketName }}</td>
-              <td>{{ bucket.category || 'N/A' }}</td>
+            <tr v-for="bucket in buckets" :key="bucket.id">
+              <td>{{ bucket.name }}</td>
+              <td>{{ bucket.category }}</td>
               <td>${{ bucket.allocatedAmount.toFixed(2) }}</td>
               <td>{{ calculateBucketPercentage(bucket) }}%</td>
             </tr>
@@ -140,22 +140,30 @@
 import { ref, computed } from 'vue';
 
 interface Bucket {
-  bucketName: string;
+  id: string;
+  name: string;
   allocatedAmount: number;
-  category?: string;
+  category: string;
 }
 
 interface Account {
   id: string;
   name: string;
-  buckets: Bucket[];
-  notes: string;
-  isChecked: boolean;
+  type: string;
+  notes?: string;
 }
 
 const props = defineProps({
   account: {
     type: Object as () => Account,
+    required: true
+  },
+  buckets: {
+    type: Array as () => Bucket[],
+    required: true
+  },
+  isChecked: {
+    type: Boolean,
     required: true
   },
   planInitialBalance: {
@@ -184,10 +192,10 @@ const isOpen = ref(false);
 
 // Calculate the total amount allocated for the account
 const accountTotal = computed((): number => {
-  if (!props.account.buckets || !Array.isArray(props.account.buckets)) {
+  if (!props.buckets || !Array.isArray(props.buckets)) {
     return 0;
   }
-  return props.account.buckets.reduce((total, bucket) => total + bucket.allocatedAmount, 0);
+  return props.buckets.reduce((total, bucket) => total + bucket.allocatedAmount, 0);
 });
 
 // Format currency

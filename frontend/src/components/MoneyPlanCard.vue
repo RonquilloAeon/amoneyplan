@@ -56,16 +56,18 @@
       
       <!-- Using the new AccountCard component for each account -->
       <AccountCard
-        v-for="account in plan.accounts"
-        :key="account.id"
-        :account="account"
+        v-for="planAccount in plan.planAccounts"
+        :key="planAccount.id"
+        :account="planAccount.account"
+        :buckets="planAccount.buckets"
+        :is-checked="planAccount.isChecked"
         :plan-initial-balance="plan.initialBalance"
         :is-archived="plan.isArchived"
         :is-committed="plan.isCommitted"
         @toggle-check="toggleAccountCheck"
         @edit-notes="editAccountNotes"
-        @edit-account="$emit('edit-account', account)"
-        @remove-account="$emit('remove-account', account)"
+        @edit-account="$emit('edit-account', planAccount)"
+        @remove-account="$emit('remove-account', planAccount)"
       />
     </div>
     
@@ -82,9 +84,9 @@
     <EditAccountNotesModal
       v-if="selectedAccount"
       :plan-id="plan.id"
-      :account-id="selectedAccount.id"
-      :account-name="selectedAccount.name"
-      :initial-notes="selectedAccount.notes"
+      :account-id="selectedAccount.account.id"
+      :account-name="selectedAccount.account.name"
+      :initial-notes="selectedAccount.account.notes"
       @close="selectedAccount = null"
       @notes-saved="handleAccountNotesUpdated"
     />
@@ -100,23 +102,30 @@ import EditAccountNotesModal from './EditAccountNotesModal.vue';
 import AccountCard from './AccountCard.vue';
 
 interface Bucket {
-  bucketName: string;
+  id: string;
+  name: string;
   allocatedAmount: number;
-  category?: string;
+  category: string;
 }
 
 interface Account {
   id: string;
   name: string;
+  type: string;
+  notes?: string;
+}
+
+interface PlanAccount {
+  id: string;
+  account: Account;
   buckets: Bucket[];
   isChecked: boolean;
-  notes: string;
 }
 
 interface MoneyPlan {
   id: string;
   planDate: string;
-  accounts: Account[];
+  planAccounts: PlanAccount[];
   isCommitted: boolean;
   isArchived: boolean;
   initialBalance: number;
@@ -137,13 +146,12 @@ const emit = defineEmits([
 
 const isArchiving = ref(false);
 const showEditPlanNotes = ref(false);
-const selectedAccount = ref<Account | null>(null);
+const selectedAccount = ref<PlanAccount | null>(null);
 
-const ARCHIVE_PLAN_MUTATION = `
+const ARCHIVE_PLAN_MUTATION = gql`
   mutation archivePlan($input: ArchivePlanInput!) {
     moneyPlan {
       archivePlan(input: $input) {
-        success
         error {
           message
         }
@@ -156,19 +164,17 @@ const ARCHIVE_PLAN_MUTATION = `
   }
 `;
 
-const SET_ACCOUNT_CHECKED_MUTATION = `
+const SET_ACCOUNT_CHECKED_MUTATION = gql`
   mutation setAccountCheckedState($input: SetAccountCheckedStateInput!) {
     moneyPlan {
       setAccountCheckedState(input: $input) {
-        success
         error {
           message
         }
         moneyPlan {
           id
-          accounts {
+          planAccounts {
             id
-            name
             isChecked
           }
         }
@@ -204,11 +210,11 @@ async function archivePlan() {
       console.error('Error archiving plan:', result.error);
       return;
     }
-    if (result.data?.moneyPlan?.archivePlan?.success) {
-      emit('planArchived', result.data.moneyPlan.archivePlan.moneyPlan);
-    } else {
-      console.error('Failed to archive plan:', result.data?.moneyPlan?.archivePlan?.error?.message);
+    if (result.data?.moneyPlan?.archivePlan?.error) {
+      console.error('Failed to archive plan:', result.data.moneyPlan.archivePlan.error.message);
+      return;
     }
+    emit('planArchived', result.data.moneyPlan.archivePlan.moneyPlan);
   } catch (e) {
     console.error('Error archiving plan:', e);
   } finally {
@@ -223,17 +229,17 @@ function getArchiveTooltip() {
   return "Archive this draft plan if you no longer need it";
 }
 
-function editAccountNotes(account: Account) {
-  selectedAccount.value = account;
+function editAccountNotes(planAccount: PlanAccount) {
+  selectedAccount.value = planAccount;
 }
 
-async function toggleAccountCheck(account: Account) {
+async function toggleAccountCheck(planAccount: PlanAccount) {
   try {
     const result = await executeAccountCheckMutation({
       input: {
         planId: props.plan.id,
-        accountId: account.id,
-        isChecked: !account.isChecked
+        planAccountId: planAccount.id,
+        isChecked: !planAccount.isChecked
       }
     });
 
@@ -241,12 +247,12 @@ async function toggleAccountCheck(account: Account) {
       console.error('Error toggling account check state:', result.error);
       return;
     }
-    if (result.data?.moneyPlan?.setAccountCheckedState?.success) {
-      emit('planUpdated', result.data.moneyPlan.setAccountCheckedState.moneyPlan);
-    } else {
+    if (result.data?.moneyPlan?.setAccountCheckedState?.error) {
       console.error('Failed to toggle account check state:', 
-        result.data?.moneyPlan?.setAccountCheckedState?.error?.message);
+        result.data.moneyPlan.setAccountCheckedState.error.message);
+      return;
     }
+    emit('planUpdated', result.data.moneyPlan.setAccountCheckedState.moneyPlan);
   } catch (e) {
     console.error('Error toggling account check state:', e);
   }
@@ -258,5 +264,6 @@ function handlePlanNotesUpdated(updatedPlan: MoneyPlan) {
 
 function handleAccountNotesUpdated(updatedPlan: MoneyPlan) {
   emit('planUpdated', updatedPlan);
+  selectedAccount.value = null;
 }
 </script>

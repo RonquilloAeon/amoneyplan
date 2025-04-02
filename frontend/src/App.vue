@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { RouterLink, RouterView } from 'vue-router';
+import { RouterLink, RouterView, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import LoginForm from './components/LoginForm.vue';
 import RegisterForm from './components/RegisterForm.vue';
@@ -9,13 +9,16 @@ import type { User } from './stores/auth';
 
 const showLogin = ref(true);
 const authStore = useAuthStore();
+const router = useRouter();
 
-function handleAuthSuccess(user: User) {
-  authStore.setUser(user);
+async function handleAuthSuccess(user: User) {
+  await authStore.setUser(user);
+  router.push('/');
 }
 
 async function handleLogout() {
   await authStore.handleLogout();
+  router.push('/');
 }
 </script>
 

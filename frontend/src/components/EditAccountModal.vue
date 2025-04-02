@@ -3,6 +3,22 @@
     <div class="modal-box relative max-w-md w-11/12">
       <h3 class="font-bold text-lg mb-4">Edit Account: {{ accountName }}</h3>
       
+      <div class="form-control w-full mb-4">
+        <label class="label py-1">
+          <span class="label-text">Account</span>
+        </label>
+        <select 
+          v-model="selectedAccountId" 
+          class="select select-bordered select-sm w-full"
+          required
+        >
+          <option disabled value="">Select an account</option>
+          <option v-for="account in availableAccounts" :key="account.id" :value="account.id">
+            {{ account.name }}
+          </option>
+        </select>
+      </div>
+      
       <div class="alert alert-info mb-4">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         <div>
@@ -33,7 +49,7 @@
               <span class="label-text">Bucket Name</span>
             </label>
             <input 
-              v-model="bucket.bucketName" 
+              v-model="bucket.name" 
               type="text" 
               placeholder="e.g. Emergency Fund"
               class="input input-bordered input-sm w-full" 
@@ -147,21 +163,31 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useMutation } from '@urql/vue';
+import { useMutation, useQuery } from '@urql/vue';
 import gql from 'graphql-tag';
+import { ACCOUNTS_QUERY } from '../graphql/queries';
 
 const dialogRef = ref<HTMLDialogElement | null>(null);
 const emit = defineEmits(['close', 'accountUpdated']);
 
 interface Bucket {
-  bucketName: string;
+  id?: string;
+  name: string;
   category: string;
   allocatedAmount: number;
 }
 
+interface Account {
+  id: string;
+  name: string;
+  type: string;
+  notes?: string;
+}
+
 const props = defineProps<{
   planId: string;
-  accountId: string;
+  planAccountId?: string;
+  accountId?: string;
   accountName: string;
   originalBuckets: Bucket[];
   currentAccountTotal: number;
@@ -169,6 +195,13 @@ const props = defineProps<{
   isChecked: boolean;
   isOpen: boolean;
 }>();
+
+// Fetch available accounts
+const [{ data: accountsData }] = useQuery({
+  query: ACCOUNTS_QUERY,
+});
+
+const availableAccounts = computed(() => accountsData.value?.accounts || []);
 
 // Watch for isOpen changes to show/close the dialog
 watch(() => props.isOpen, (newValue) => {
@@ -195,6 +228,7 @@ onMounted(() => {
 const errorMessage = ref('');
 const isSaving = ref(false);
 const buckets = ref<Bucket[]>(props.originalBuckets.map(b => ({...b})));
+const selectedAccountId = ref(props.accountId || '');
 
 // Computed remaining balance 
 const totalBucketAmount = computed(() => {
@@ -211,7 +245,7 @@ const remainingBalance = computed(() => {
 
 const isValid = computed(() => {
   return buckets.value.length > 0 && 
-    buckets.value.every(b => b.bucketName.trim() !== '' && b.category && b.allocatedAmount >= 0) &&
+    buckets.value.every(b => b.name.trim() !== '' && b.category && b.allocatedAmount >= 0) &&
     remainingBalance.value >= 0;
 });
 
@@ -221,7 +255,7 @@ watch(buckets, validateTotalAmount, { deep: true });
 // Add/remove bucket methods
 function addBucket() {
   buckets.value.push({
-    bucketName: '',
+    name: '',
     category: '',
     allocatedAmount: 0
   });
@@ -243,70 +277,64 @@ function validateTotalAmount() {
 
 // GraphQL mutation
 const CHANGE_ACCOUNT_CONFIGURATION_MUTATION = gql`
-  mutation changeAccountConfiguration($input: AccountConfigurationChangeInput!) {
+  mutation changeAccountConfiguration($input: PlanAccountConfigurationChangeInput!) {
     moneyPlan {
       changeAccountConfiguration(input: $input) {
         error {
           message
         }
-        success
-        moneyPlan {
+        planAccount {
           id
-          accounts {
+          account {
             id
             name
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
+            type
+            notes
           }
-          initialBalance
-          remainingBalance
-          timestamp
+          buckets {
+            id
+            name
+            category
+            allocatedAmount
+          }
         }
       }
     }
   }
 `;
 
-const { executeMutation } = useMutation(CHANGE_ACCOUNT_CONFIGURATION_MUTATION);
+const [{ error: mutationError }, executeMutation] = useMutation(CHANGE_ACCOUNT_CONFIGURATION_MUTATION);
 
 async function updateAccount() {
+  if (!isValid.value) return;
+  
   isSaving.value = true;
   errorMessage.value = '';
-
+  
   try {
-    const variables = { 
+    const result = await executeMutation({
       input: {
         planId: props.planId,
-        accountId: props.accountId,
-        newBucketConfig: buckets.value.map(b => ({
-          bucketName: b.bucketName,
-          allocatedAmount: Number(b.allocatedAmount),
-          category: b.category
+        planAccountId: props.planAccountId,
+        accountId: selectedAccountId.value,
+        buckets: buckets.value.map(bucket => ({
+          id: bucket.id,
+          name: bucket.name,
+          category: bucket.category,
+          allocatedAmount: Number(bucket.allocatedAmount)
         }))
       }
-    };
+    });
     
-    const response = await executeMutation(variables);
-    
-    if (response.error) {
-      errorMessage.value = response.error.message;
+    if (result.error) {
+      errorMessage.value = result.error.message;
       return;
     }
     
-    if (response.data.moneyPlan.changeAccountConfiguration.error) {
-      errorMessage.value = response.data.moneyPlan.changeAccountConfiguration.error.message;
-      return;
-    }
-    
-    // Success! Emit update event first
-    emit('accountUpdated', response.data.moneyPlan.changeAccountConfiguration.moneyPlan);
-    // Then close the modal which will trigger the close event handler
+    emit('accountUpdated', result.data.moneyPlan.changeAccountConfiguration.planAccount);
     emit('close');
   } catch (error) {
-    errorMessage.value = (error as Error).message;
+    errorMessage.value = 'An error occurred while saving changes';
   } finally {
     isSaving.value = false;
   }
@@ -379,6 +407,7 @@ async function toggleAccountCheck() {
 
 function resetForm() {
   buckets.value = props.originalBuckets.map(b => ({...b}));
+  selectedAccountId.value = props.accountId || '';
   errorMessage.value = '';
 }
 

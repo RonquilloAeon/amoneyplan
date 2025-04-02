@@ -10,12 +10,23 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useMutation } from '@urql/vue';
-import { GOOGLE_AUTH_CALLBACK } from '../graphql/auth';
+import { createClient, cacheExchange, fetchExchange } from '@urql/core';
+import { GOOGLE_AUTH_CALLBACK, ME_QUERY } from '../graphql/auth';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const error = ref('');
 const { executeMutation: googleCallback } = useMutation(GOOGLE_AUTH_CALLBACK);
+const client = createClient({
+  url: import.meta.env.VITE_GRAPHQL_URL,
+  exchanges: [cacheExchange, fetchExchange],
+  fetchOptions: () => {
+    const token = localStorage.getItem('token');
+    return {
+      headers: { authorization: token ? `Bearer ${token}` : '' },
+    };
+  },
+});
 
 onMounted(async () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -31,16 +42,23 @@ onMounted(async () => {
     const result = await googleCallback({ code });
     
     if (result.data?.auth?.googleCallback?.success) {
-      // Update the auth store with the user data
-      await authStore.setUser(result.data.auth.googleCallback.user);
-      
-      // Get the stored redirect URL or default to homepage
-      const redirectUrl = localStorage.getItem('googleAuthRedirect') || '/';
-      localStorage.removeItem('googleAuthRedirect'); // Clear stored URL
-      
-      router.push(redirectUrl);
+      // Fetch user data using ME_QUERY
+      const userResult = await client.query(ME_QUERY);
+      if (userResult.data?.me) {
+        // Update the auth store with the user data
+        await authStore.setUser(userResult.data.me);
+        
+        // Get the stored redirect URL or default to homepage
+        const redirectUrl = localStorage.getItem('googleAuthRedirect') || '/';
+        localStorage.removeItem('googleAuthRedirect'); // Clear stored URL
+        
+        router.push(redirectUrl);
+      } else {
+        error.value = 'Failed to fetch user data';
+        setTimeout(() => router.push('/'), 3000);
+      }
     } else {
-      error.value = result.data?.auth?.googleCallback?.error?.message || 'Authentication failed';
+      error.value = result.data?.auth?.googleCallback?.error || 'Authentication failed';
       setTimeout(() => router.push('/'), 3000);
     }
   } catch (err) {

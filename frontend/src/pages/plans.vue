@@ -71,22 +71,30 @@ import MoneyPlanCard from '../components/MoneyPlanCard.vue';
 import PageHeader from '../components/PageHeader.vue';
 
 interface Bucket {
-  bucketName: string;
+  id: string;
+  name: string;
   allocatedAmount: number;
+  category: string;
 }
 
 interface Account {
   id: string;
   name: string;
-  notes: string;
-  isChecked: boolean;
+  type: string;
+  notes?: string;
+}
+
+interface PlanAccount {
+  id: string;
+  account: Account;
   buckets: Bucket[];
+  isChecked: boolean;
 }
 
 interface MoneyPlan {
   id: string;
   planDate: string;
-  accounts: Account[];
+  planAccounts: PlanAccount[];
   isCommitted: boolean;
   isArchived: boolean;
   initialBalance: number;
@@ -100,128 +108,80 @@ interface Toast {
   type: string;
 }
 
+const filterStatus = ref<'active' | 'archived'>('active');
 const showStartPlanDialog = ref(false);
-const moneyPlans = ref<MoneyPlan[]>([]);
-const filterStatus = ref('active'); // 'active' or 'archived'
 const toast = ref<Toast>({
   show: false,
   message: '',
-  type: 'alert-info'
+  type: 'alert-success'
 });
 
-// Create a computed property for the filter
-const currentFilter = computed(() => ({
-  isArchived: filterStatus.value === 'archived',
-  status: null // We don't filter by draft/committed status anymore
-}));
-
-const GET_MONEY_PLANS = `
-  query moneyPlans($filter: MoneyPlanFilter) {
-    moneyPlans(filter: $filter) {
-      pageInfo {
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges {
-        node {
+const MONEY_PLANS_QUERY = `
+  query MoneyPlans {
+    moneyPlans {
+      id
+      planDate
+      planAccounts {
+        id
+        account {
           id
-          planDate
-          accounts {
-            id
-            name
-            notes
-            isChecked
-            buckets {
-              bucketName
-              allocatedAmount
-              category
-            }
-          }
-          isCommitted
-          isArchived
-          initialBalance
-          remainingBalance
+          name
+          type
           notes
         }
+        buckets {
+          id
+          name
+          category
+          allocatedAmount
+        }
+        isChecked
       }
+      isCommitted
+      isArchived
+      initialBalance
+      remainingBalance
+      notes
     }
   }
 `;
 
-const { data, error, executeQuery } = useQuery({
-  query: GET_MONEY_PLANS,
-  variables: { filter: currentFilter },
-  requestPolicy: 'cache-and-network' // This will ensure we get fresh data while showing cached data
+const { data, error } = useQuery({
+  query: MONEY_PLANS_QUERY,
 });
 
-// Watch for filter changes and rerun the query
-watchEffect(() => {
-  executeQuery({ filter: currentFilter.value });
+const moneyPlans = computed(() => {
+  if (!data.value?.moneyPlans) return [];
+  return data.value.moneyPlans.filter((plan: MoneyPlan) => 
+    filterStatus.value === 'active' ? !plan.isArchived : plan.isArchived
+  );
 });
 
-watchEffect(() => {
-  if (data.value) {
-    moneyPlans.value = data.value.moneyPlans.edges.map((edge: { node: MoneyPlan }) => edge.node);
-  }
-  if (error.value) {
-    console.error(error.value);
-    showToast('Failed to load money plans', 'alert-error');
-  }
-});
-
-onMounted(() => {
-  executeQuery({ filter: currentFilter.value });
-});
-
-const addPlan = () => {
-  // Show success message
-  showToast('Plan created successfully', 'alert-success');
-  // Force a refresh of the data
-  executeQuery({ 
-    filter: currentFilter.value,
-    requestPolicy: 'network-only' // Force fresh data from server
-  });
-};
-
-function handlePlanArchived(_updatedPlan: MoneyPlan) {
-  // Show success message
-  showToast('Plan archived successfully', 'alert-success');
-  
-  // Refresh the plans list
-  executeQuery({ filter: currentFilter.value });
-}
-
-function handlePlanUpdated(_updatedPlan: MoneyPlan) {
-  // Show success message
-  showToast('Plan updated successfully', 'alert-success');
-  
-  // Refresh the plans list to get the latest data
-  executeQuery({ 
-    filter: currentFilter.value,
-    requestPolicy: 'network-only' // Force fresh data from server
-  });
-}
-
-function handleEditAccount(account: Account) {
-  // In the plans view, we can't edit accounts, but we can handle the event
-  showToast(`Cannot edit account "${account.name}" in this view`, 'alert-info');
-}
-
-function handleRemoveAccount(account: Account) {
-  // In the plans view, we can't remove accounts, but we can handle the event
-  showToast(`Cannot remove account "${account.name}" in this view`, 'alert-info');
-}
-
-function showToast(message: string, type: string = 'alert-info', duration: number = 3000) {
-  toast.value = {
-    show: true,
-    message,
-    type
-  };
+function showToast(message: string, type: string = 'alert-success') {
+  toast.value = { show: true, message, type };
   setTimeout(() => {
     toast.value.show = false;
-  }, duration);
+  }, 3000);
+}
+
+function handlePlanArchived(archivedPlan: MoneyPlan) {
+  showToast('Plan archived successfully');
+}
+
+function handlePlanUpdated(updatedPlan: MoneyPlan) {
+  showToast('Plan updated successfully');
+}
+
+function handleEditAccount(planAccount: PlanAccount) {
+  // TODO: Implement account editing
+}
+
+function handleRemoveAccount(planAccount: PlanAccount) {
+  // TODO: Implement account removal
+}
+
+function addPlan(newPlan: MoneyPlan) {
+  showToast('New plan created successfully');
 }
 </script>
 

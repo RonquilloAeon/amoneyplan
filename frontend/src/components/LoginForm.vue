@@ -40,7 +40,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useMutation } from '@urql/vue';
-import { LOGIN_MUTATION } from '../graphql/auth';
+import { createClient, cacheExchange, fetchExchange } from '@urql/core';
+import { LOGIN_MUTATION, ME_QUERY } from '../graphql/auth';
 import GoogleAuthButton from './GoogleAuthButton.vue';
 
 const emit = defineEmits(['auth-success', 'switch-to-register']);
@@ -63,11 +64,39 @@ async function handleSubmit() {
     });
     
     if (result.data?.auth?.login?.success) {
-      emit('auth-success', result.data.auth.login.user);
+      const token = result.data.auth.login.token;
+      if (!token) {
+        error.value = 'No token received from server';
+        return;
+      }
+
+      // Store the token first
+      localStorage.setItem('token', token);
+      
+      // Create a new client with the token
+      const client = createClient({
+        url: import.meta.env.VITE_GRAPHQL_URL,
+        exchanges: [cacheExchange, fetchExchange],
+        fetchOptions: () => ({
+          headers: { 
+            authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        }),
+      });
+
+      // Now fetch the user data using the ME_QUERY
+      const userResult = await client.query(ME_QUERY);
+      if (userResult.data?.me) {
+        emit('auth-success', userResult.data.me);
+      } else {
+        error.value = 'Failed to fetch user data';
+      }
     } else {
-      error.value = result.data?.auth?.login?.error?.message || 'Login failed';
+      error.value = result.data?.auth?.login?.error || 'Login failed';
     }
   } catch (e) {
+    console.error('Login error:', e);
     error.value = 'An error occurred during login';
   } finally {
     loading.value = false;

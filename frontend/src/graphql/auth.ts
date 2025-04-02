@@ -5,16 +5,8 @@ export const LOGIN_MUTATION = gql`
     auth {
       login(username: $username, password: $password) {
         success
-        user {
-          id
-          username
-          email
-          firstName
-          lastName
-        }
-        error {
-          message
-        }
+        error
+        token
       }
     }
   }
@@ -25,16 +17,7 @@ export const REGISTER_MUTATION = gql`
     auth {
       register(username: $username, email: $email, password: $password, firstName: $firstName, lastName: $lastName) {
         success
-        user {
-          id
-          username
-          email
-          firstName
-          lastName
-        }
-        error {
-          message
-        }
+        error
       }
     }
   }
@@ -45,9 +28,7 @@ export const LOGOUT_MUTATION = gql`
     auth {
       logout {
         success
-        error {
-          message
-        }
+        error
       }
     }
   }
@@ -68,16 +49,7 @@ export const GOOGLE_AUTH_CALLBACK = gql`
     auth {
       googleCallback(code: $code) {
         success
-        user {
-          id
-          username
-          email
-          firstName
-          lastName
-        }
-        error {
-          message
-        }
+        error
       }
     }
   }

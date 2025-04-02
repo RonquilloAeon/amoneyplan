@@ -199,7 +199,7 @@ export const MONEY_PLANS_QUERY = gql`
             id
             name
             buckets {
-              bucketName
+              name
               category
               allocatedAmount
             }
@@ -226,25 +226,28 @@ export const MONEY_PLANS_QUERY = gql`
 `;
 
 export const MONEY_PLAN_QUERY = gql`
-  query MoneyPlan($id: ID!) {
-    moneyPlans {
-      get(id: $id) {
+  query MoneyPlan($id: GlobalID!) {
+    moneyPlan(id: $id) {
+      id
+      initialBalance
+      remainingBalance
+      accounts {
         id
         name
-        description
-        startDate
-        endDate
-        status
-        createdAt
-        updatedAt
-        accounts {
-          id
+        buckets {
           name
-          type
-          balance
-          currency
+          category
+          allocatedAmount
         }
+        isChecked
+        notes
       }
+      notes
+      isCommitted
+      isArchived
+      createdAt
+      planDate
+      archivedAt
     }
   }
 `;
@@ -259,7 +262,7 @@ export const DRAFT_MONEY_PLAN_QUERY = gql`
         id
         name
         buckets {
-          bucketName
+          name
           category
           allocatedAmount
         }

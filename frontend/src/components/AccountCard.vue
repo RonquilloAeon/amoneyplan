@@ -115,7 +115,7 @@
           </thead>
           <tbody>
             <tr v-for="bucket in buckets" :key="bucket.id">
-              <td>{{ bucket.bucketName }}</td>
+              <td>{{ bucket.name }}</td>
               <td>{{ bucket.category }}</td>
               <td>${{ bucket.allocatedAmount.toFixed(2) }}</td>
               <td>{{ calculateBucketPercentage(bucket) }}%</td>
@@ -141,9 +141,9 @@ import { ref, computed } from 'vue';
 
 interface Bucket {
   id: string;
-  bucketName: string;
-  allocatedAmount: number;
+  name: string;
   category: string;
+  allocatedAmount: number;
 }
 
 interface Account {

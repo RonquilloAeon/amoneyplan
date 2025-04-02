@@ -243,7 +243,7 @@ import {
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 interface Bucket {
-  bucketName: string;
+  name: string;
   allocatedAmount: number;
   category: string;
 }

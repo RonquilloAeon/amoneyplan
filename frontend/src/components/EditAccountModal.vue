@@ -49,7 +49,7 @@
               <span class="label-text">Bucket Name</span>
             </label>
             <input 
-              v-model="bucket.bucketName" 
+              v-model="bucket.name" 
               type="text" 
               placeholder="e.g. Emergency Fund"
               class="input input-bordered input-sm w-full" 
@@ -182,7 +182,7 @@ const emit = defineEmits(['close', 'accountUpdated']);
 
 interface Bucket {
   id?: string;
-  bucketName: string;
+  name: string;
   category: string;
   allocatedAmount: number;
 }
@@ -219,8 +219,7 @@ const errorMessage = ref('');
 const isSaving = ref(false);
 const buckets = ref<Bucket[]>(props.originalBuckets.map(b => ({
   ...b,
-  bucketName: b.name || b.bucketName || '', // Handle both name and bucketName
-  name: b.name || b.bucketName || '' // Keep name for backward compatibility
+  name: b.name || '' // Use name directly
 })));
 const selectedAccountId = ref('');
 
@@ -271,7 +270,7 @@ const isValid = computed(() => {
   return buckets.value.length > 0 && 
     buckets.value.every(b => {
       // Safely handle undefined values
-      const name = b.bucketName || '';
+      const name = b.name || '';
       const category = b.category || '';
       return name.trim() !== '' && category && b.allocatedAmount >= 0;
     }) &&
@@ -284,7 +283,7 @@ watch(buckets, validateTotalAmount, { deep: true });
 // Add/remove bucket methods
 function addBucket() {
   buckets.value.push({
-    bucketName: '',
+    name: '',
     category: '',
     allocatedAmount: 0
   });
@@ -341,7 +340,7 @@ async function updateAccount() {
         planAccountId: props.planAccountId,
         accountId: selectedAccountId.value,
         newBucketConfig: buckets.value.map(bucket => ({
-          bucketName: bucket.bucketName,
+          name: bucket.name,
           category: bucket.category,
           allocatedAmount: Number(bucket.allocatedAmount)
         }))
@@ -431,8 +430,7 @@ async function toggleAccountCheck() {
 function resetForm() {
   buckets.value = props.originalBuckets.map(b => ({
     ...b,
-    bucketName: b.name || b.bucketName || '', // Handle both name and bucketName
-    name: b.name || b.bucketName || '' // Keep name for backward compatibility
+    name: b.name || '' // Use name directly
   }));
   // Don't reset selectedAccountId here since we want to keep the current account selected
   errorMessage.value = '';

@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict
 
+import pytest
 from django.test import Client
 from faker import Faker
 
@@ -53,7 +54,12 @@ class TestGraphQLAPI:
             raise Exception(f"Failed to create test user: {json.dumps(result['auth']['register'], indent=2)}")
 
     def execute_query(
-        self, client: Client, query: str, user: TestUser | None = None, variables: Dict[str, Any] = None
+        self,
+        client: Client,
+        query: str,
+        fail_on_error: bool = True,
+        user: TestUser | None = None,
+        variables: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """Execute a GraphQL query and return the response."""
         data = {
@@ -69,9 +75,12 @@ class TestGraphQLAPI:
         response = client.post(
             "/graphql/", data=json.dumps(data), content_type="application/json", headers=headers
         )
-        result = response.json()["data"]
+        result = response.json()
 
-        return result
+        if "errors" in result and fail_on_error:
+            pytest.fail(f"errors returned: {result['errors']}")
+
+        return result["data"]
 
     def create_money_plan(self, client: Client, initial_balance: float, notes: str) -> str:
         """Helper method to create a money plan and return its ID."""
@@ -127,9 +136,7 @@ class TestGraphQLAPI:
             "input": {
                 "planId": plan_id,
                 "name": account_name,
-                "buckets": [
-                    {"bucketName": "Default", "category": "default", "allocatedAmount": initial_balance}
-                ],
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": initial_balance}],
             }
         }
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
@@ -160,3 +167,58 @@ class TestGraphQLAPI:
         commit_variables = {"input": {"planId": plan_id}}
         result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         return "data" in result["moneyPlan"]["commitPlan"]
+
+    def create_test_plan(self, client, user, initial_balance=1000.0, notes="Test Plan") -> tuple[str, str]:
+        """Create a test plan with a single account and bucket."""
+        create_plan_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        variables = {"input": {"initialBalance": initial_balance, "notes": notes}}
+
+        result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
+        plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add an account
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        account_variables = {
+            "input": {
+                "planId": plan_id,
+                "name": "Test Account",
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": initial_balance}],
+            }
+        }
+
+        result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
+        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
+
+        return plan_id, account_id

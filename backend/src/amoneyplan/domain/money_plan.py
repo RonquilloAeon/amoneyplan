@@ -53,7 +53,7 @@ class InvalidPlanStateError(MoneyPlanError):
 class BucketConfig:
     """Configuration for a bucket."""
 
-    bucket_name: str
+    name: str
     category: str
     allocated_amount: Money = field(default_factory=lambda: Money(0))
 
@@ -115,13 +115,13 @@ class MoneyPlan:
                 if config.buckets:
                     for bucket_config in config.buckets:
                         bucket = Bucket(
-                            bucket_name=bucket_config.bucket_name,
+                            name=bucket_config.name,
                             category=bucket_config.category,
                             allocated_amount=bucket_config.allocated_amount,
                         )
-                        account.buckets[bucket.bucket_name] = bucket
+                        account.buckets[bucket.name] = bucket
                         # Reduce the remaining balance by the allocated amount
-                        remaining_balance -= bucket_config.allocated_amount
+                        remaining_balance -= bucket.allocated_amount
 
                 # Add the account allocation to the plan
                 accounts[account.account_id] = PlanAccountAllocation(account=account)
@@ -173,9 +173,7 @@ class MoneyPlan:
 
             # Copy bucket structure with zero allocations
             for bucket_name, bucket in source_account.buckets.items():
-                new_bucket = Bucket(
-                    bucket_name=bucket.bucket_name, category=bucket.category, allocated_amount=Money(0)
-                )
+                new_bucket = Bucket(name=bucket.name, category=bucket.category, allocated_amount=Money(0))
                 new_account.buckets[bucket_name] = new_bucket
 
             # Add account to the new plan
@@ -302,11 +300,11 @@ class MoneyPlan:
         # Process each bucket configuration
         for config in new_bucket_config:
             bucket = Bucket(
-                bucket_name=config.bucket_name,
+                name=config.name,
                 category=config.category,
                 allocated_amount=config.allocated_amount,
             )
-            new_buckets[bucket.bucket_name] = bucket
+            new_buckets[bucket.name] = bucket
             new_total += bucket.allocated_amount
 
         # Calculate adjustment needed to remaining balance
@@ -375,7 +373,11 @@ class MoneyPlan:
             raise MoneyPlanError("Cannot modify an archived plan")
 
     def add_account(
-        self, account_id: str, name: str, buckets: Optional[List[Union[BucketConfig, dict]]] = None
+        self,
+        account_id: str,
+        name: str,
+        buckets: Optional[List[Union[BucketConfig, dict]]] = None,
+        notes: str = "",
     ):
         """
         Add a new account to the plan.
@@ -384,6 +386,7 @@ class MoneyPlan:
             account_id: id for the account.
             name: The name of the account
             buckets: Optional list of bucket configurations, can be BucketConfig objects or dicts
+            notes: Optional notes for the account
 
         Returns:
             The ID of the new account
@@ -403,20 +406,20 @@ class MoneyPlan:
             for config in buckets:
                 if isinstance(config, dict):
                     bucket = Bucket(
-                        bucket_name=config["bucket_name"],
+                        name=config["name"],
                         category=config["category"],
                         allocated_amount=Money(config["allocated_amount"]),
                     )
                 else:
                     bucket = Bucket(
-                        bucket_name=config.bucket_name,
+                        name=config.name,
                         category=config.category,
                         allocated_amount=config.allocated_amount,
                     )
                 account_buckets.append(bucket)
 
         # Create the account with buckets (will add default bucket if none provided)
-        account = Account.create(account_id, name, buckets=account_buckets)
+        account = Account.create(account_id, name, buckets=account_buckets, notes=notes)
 
         # Update remaining balance
         if account_buckets:

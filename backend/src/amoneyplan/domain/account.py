@@ -3,7 +3,7 @@ Account domain models for the money management app.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from amoneyplan.domain.money import Money
 
@@ -15,12 +15,12 @@ class Bucket:
     Each bucket has a name, category, and allocated amount.
     """
 
-    bucket_name: str
+    name: str
     category: str
     allocated_amount: Money = field(default_factory=lambda: Money(0))
 
     def __str__(self) -> str:
-        return f"{self.bucket_name} ({self.category}): {self.allocated_amount}"
+        return f"{self.name} ({self.category}): {self.allocated_amount}"
 
 
 @dataclass
@@ -37,7 +37,9 @@ class Account:
     notes: str = ""
 
     @classmethod
-    def create(cls, account_id: str, name: str, buckets: Optional[List[Bucket]] = None) -> "Account":
+    def create(
+        cls, account_id: str, name: str, buckets: Optional[List[Union[Bucket, dict]]] = None, notes: str = ""
+    ) -> "Account":
         """
         Factory method to create a new account with a generated ID.
         If no buckets are provided or added during creation, creates a default bucket.
@@ -45,18 +47,27 @@ class Account:
         Args:
             account_id: id for the account.
             name: The name of the account
-            buckets: Optional list of buckets to add to the account
+            buckets: Optional list of buckets to add to the account. Can be Bucket objects or dicts.
+            notes: Optional notes for the account.
         """
-        account = cls(account_id=account_id, name=name, buckets={})
+        account = cls(account_id=account_id, name=name, buckets={}, notes=notes)
 
         if buckets:
             # If buckets are provided, use those
-            for bucket in buckets:
-                account.buckets[bucket.bucket_name] = bucket
+            for bucket_data in buckets:
+                if isinstance(bucket_data, dict):
+                    bucket = Bucket(
+                        name=bucket_data["name"],
+                        category=bucket_data["category"],
+                        allocated_amount=Money(bucket_data["allocated_amount"]),
+                    )
+                else:
+                    bucket = bucket_data
+                account.buckets[bucket.name] = bucket
         else:
             # Only create default bucket if no buckets were provided
-            default_bucket = Bucket(bucket_name="Default", category="default")
-            account.buckets[default_bucket.bucket_name] = default_bucket
+            default_bucket = Bucket(name="Default", category="default")
+            account.buckets[default_bucket.name] = default_bucket
 
         return account
 
@@ -67,7 +78,7 @@ class Account:
         if not initial_amount:
             initial_amount = Money(0)
 
-        bucket = Bucket(bucket_name=bucket_name, category=category, allocated_amount=initial_amount)
+        bucket = Bucket(name=bucket_name, category=category, allocated_amount=initial_amount)
 
         self.buckets[bucket_name] = bucket
         return bucket

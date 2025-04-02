@@ -29,7 +29,7 @@ logger = logging.getLogger("amoneyplan")
 @strawberry.type
 class Bucket(relay.Node):
     id: relay.NodeID[str]
-    bucket_name: str
+    name: str
     category: str
     allocated_amount: float
 
@@ -42,8 +42,8 @@ class Bucket(relay.Node):
     @staticmethod
     def from_domain(domain_bucket) -> "Bucket":
         bucket = Bucket(
-            id=domain_bucket.bucket_name,
-            bucket_name=domain_bucket.bucket_name,
+            id=domain_bucket.name,
+            name=domain_bucket.name,
             category=domain_bucket.category,
             allocated_amount=domain_bucket.allocated_amount.as_float,
         )
@@ -99,7 +99,7 @@ class PlanAccount(relay.Node):
         buckets = [
             Bucket(
                 id=str(bucket.id),
-                bucket_name=bucket.name,
+                name=bucket.name,
                 category=bucket.category,
                 allocated_amount=float(bucket.allocated_amount),
             )
@@ -206,13 +206,13 @@ class PlanResult:
 # GraphQL input types
 @strawberry.input
 class BucketConfigInput:
-    bucket_name: str
+    name: str
     category: str
     allocated_amount: float = 0.0
 
     def to_domain(self) -> BucketConfig:
         return BucketConfig(
-            bucket_name=self.bucket_name,
+            name=self.name,
             category=self.category,
             allocated_amount=Money(self.allocated_amount),
         )
@@ -245,7 +245,7 @@ class PlanStartInput:
 class AllocateFundsInput:
     plan_id: relay.GlobalID
     account_id: str
-    bucket_name: str
+    name: str
     amount: float
 
 
@@ -267,6 +267,7 @@ class AccountConfigurationChangeInput:
 class AddAccountInput:
     plan_id: relay.GlobalID
     name: str
+    notes: str = ""
     buckets: Optional[List[BucketConfigInput]] = None
 
 
@@ -355,7 +356,7 @@ class Query(AuthQueries):
         return None
 
     @strawberry.field
-    def money_plan(self, info: Info, plan_id: Optional[relay.GlobalID] = None) -> Optional[MoneyPlan]:
+    def money_plan(self, info: Info, id: Optional[relay.GlobalID] = None) -> Optional[MoneyPlan]:
         """
         Get a Money Plan by ID or the current plan if no ID is provided.
         """
@@ -365,8 +366,8 @@ class Query(AuthQueries):
 
         use_case = MoneyPlanUseCases()
 
-        if plan_id:
-            plan_id = plan_id.node_id
+        if id:
+            plan_id = id.node_id
             plan_result = use_case.get_plan(plan_id)
 
             if plan_result.success and plan_result.has_data():
@@ -559,7 +560,7 @@ class MoneyPlanMutations:
             result = use_case.allocate_funds(
                 plan_id=input.plan_id,
                 account_id=input.account_id,
-                bucket_name=input.bucket_name,
+                bucket_name=input.name,
                 amount=input.amount,
             )
 
@@ -655,7 +656,7 @@ class MoneyPlanMutations:
         buckets = None
         if input.buckets:
             buckets = [bucket.to_domain() for bucket in input.buckets]
-            logger.info(f"With buckets: {[b.bucket_name for b in buckets]}")
+            logger.info(f"With buckets: {[b.name for b in buckets]}")
         else:
             logger.info("No buckets specified, will use default bucket")
 
@@ -671,7 +672,9 @@ class MoneyPlanMutations:
                 )
 
             # Call add_account method which now returns UseCaseResult
-            account_result = use_case.add_account(plan_id=plan_id, name=input.name, buckets=buckets)
+            account_result = use_case.add_account(
+                plan_id=plan_id, name=input.name, buckets=buckets, notes=input.notes
+            )
 
             if not account_result.success:
                 logger.info(f"Error adding account: {account_result.message}")

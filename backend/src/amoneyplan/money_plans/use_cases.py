@@ -67,8 +67,8 @@ class InvalidPlanStateError(MoneyPlanError):
 class BucketConfig:
     """Configuration for a bucket."""
 
-    def __init__(self, bucket_name: str, category: str, allocated_amount: Money = None):
-        self.bucket_name = bucket_name
+    def __init__(self, name: str, category: str, allocated_amount: Money = None):
+        self.name = name
         self.category = category
         self.allocated_amount = allocated_amount or Money(0)
 
@@ -196,7 +196,7 @@ class MoneyPlanUseCases:
 
     @transaction.atomic
     def add_account(
-        self, plan_id: str, name: str, buckets: Optional[List[BucketConfig]] = None
+        self, plan_id: str, name: str, buckets: Optional[List[BucketConfig]] = None, notes: str = ""
     ) -> UseCaseResult[str]:
         """
         Add a new account to a plan.
@@ -205,6 +205,7 @@ class MoneyPlanUseCases:
             plan_id: The ID of the plan to add the account to
             name: The name of the account
             buckets: Optional list of bucket configurations
+            notes: Optional notes for the account
 
         Returns:
             UseCaseResult containing the ID of the new account or error information
@@ -223,7 +224,7 @@ class MoneyPlanUseCases:
             account_id = generate_safe_cuid16()
 
             # Use the domain model's add_account method
-            plan.add_account(account_id=account_id, name=name, buckets=buckets)
+            plan.add_account(account_id=account_id, name=name, buckets=buckets, notes=notes)
 
             # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
@@ -388,12 +389,12 @@ class MoneyPlanUseCases:
         self, plan_id: str, account_id: str, is_checked: bool
     ) -> UseCaseResult[None]:
         """
-        Set the checked state of an account.
+        Set the checked state of an account in a Money Plan.
 
         Args:
             plan_id: The ID of the plan
             account_id: The ID of the account
-            is_checked: The desired checked state
+            is_checked: Whether the account should be checked
 
         Returns:
             UseCaseResult indicating success or failure

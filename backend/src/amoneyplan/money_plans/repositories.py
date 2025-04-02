@@ -17,7 +17,7 @@ from .models import Account, Bucket, MoneyPlan, PlanAccount
 def to_domain_bucket(bucket: Bucket) -> DomainBucket:
     """Convert a Django Bucket model to a domain Bucket object."""
     return DomainBucket(
-        bucket_name=bucket.name, category=bucket.category, allocated_amount=Money(bucket.allocated_amount)
+        name=bucket.name, category=bucket.category, allocated_amount=Money(bucket.allocated_amount)
     )
 
 
@@ -34,7 +34,7 @@ def to_domain_account(account: Account, plan_account: PlanAccount, buckets: List
     # Add buckets
     for bucket in buckets:
         domain_bucket = to_domain_bucket(bucket)
-        domain_account.buckets[domain_bucket.bucket_name] = domain_bucket
+        domain_account.buckets[domain_bucket.name] = domain_bucket
 
     return domain_account
 
@@ -233,7 +233,12 @@ class MoneyPlanRepository:
         domain_account_ids = set(domain_plan.accounts.keys())
         for account_id, plan_account in existing_plan_accounts.items():
             if account_id not in domain_account_ids:
+                # Soft delete the plan account
                 plan_account.delete()  # This will cascade and delete associated buckets
+                # Soft delete the underlying account if it's not used in any other plans
+                account = plan_account.account
+                if not account.plan_allocations.filter(deleted_at__isnull=True).exists():
+                    account.delete()
 
     def _sync_buckets(self, domain_account: DomainAccount, plan_account: PlanAccount) -> None:
         """
@@ -259,7 +264,7 @@ class MoneyPlanRepository:
                 bucket = Bucket(
                     plan_account=plan_account,
                     user_account=self._user_account,
-                    name=domain_bucket.bucket_name,
+                    name=domain_bucket.name,
                     category=domain_bucket.category,
                     allocated_amount=domain_bucket.allocated_amount.as_decimal,
                 )

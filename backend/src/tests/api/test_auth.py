@@ -54,8 +54,8 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
 
         # Now try to fetch that plan without authentication
         query = """
-        query GetMoneyPlan($planId: GlobalID!) {
-            moneyPlan(planId: $planId) {
+        query GetMoneyPlan($id: GlobalID!) {
+            moneyPlan(id: $id) {
                 id
                 initialBalance
                 accounts {
@@ -65,7 +65,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             }
         }
         """
-        result = self.execute_query(client, query, user=None, variables={"planId": plan_id})
+        result = self.execute_query(client, query, user=None, variables={"id": plan_id})
 
         # Should return null for the moneyPlan field when unauthenticated
         assert result["moneyPlan"] is None
@@ -91,7 +91,9 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         }
         """
         variables = {"input": {"initialBalance": 1000.0, "notes": "Test plan without auth"}}
-        result = self.execute_query(client, create_plan_mutation, user=None, variables=variables)
+        result = self.execute_query(
+            client, create_plan_mutation, fail_on_error=False, user=None, variables=variables
+        )
 
         assert result is None
 
@@ -122,10 +124,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             moneyPlan {
                 addAccount(input: $input) {
                     ... on Success {
-                        data {
-                            id
-                            name
-                        }
+                        data
                     }
                     ... on ApplicationError {
                         message
@@ -138,7 +137,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             "input": {
                 "planId": plan_id_user1,
                 "name": "User 1 Account",
-                "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 1000.0}],
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
         self.execute_query(client, add_account_mutation, user=user1, variables=account_variables)
@@ -148,8 +147,8 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
 
         # User2 tries to access User1's specific plan
         query = """
-        query GetMoneyPlan($planId: GlobalID!) {
-            moneyPlan(planId: $planId) {
+        query GetMoneyPlan($id: GlobalID!) {
+            moneyPlan(id: $id) {
                 id
                 initialBalance
                 accounts {
@@ -159,7 +158,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             }
         }
         """
-        result = self.execute_query(client, query, user=user2, variables={"planId": plan_id_user1})
+        result = self.execute_query(client, query, user=user2, variables={"id": plan_id_user1})
 
         # User2 should not be able to see User1's plan
         assert result["moneyPlan"] is None
@@ -229,7 +228,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             "input": {
                 "planId": plan_id,
                 "name": "User 1 Special Account",
-                "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 1000.0}],
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
         self.execute_query(client, add_account_mutation, user=user1, variables=account_variables)
@@ -295,7 +294,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             "input": {
                 "planId": plan_id_user1,
                 "name": "User 1 Protected Account",
-                "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 1000.0}],
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
         account_result = self.execute_query(
@@ -338,7 +337,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
             "input": {
                 "planId": plan_id_user1,
                 "name": "User 2's Intrusion Account",
-                "buckets": [{"bucketName": "Intrusion", "category": "intrusion", "allocatedAmount": 500.0}],
+                "buckets": [{"name": "Intrusion", "category": "intrusion", "allocatedAmount": 500.0}],
             }
         }
         result = self.execute_query(client, add_account_mutation, user=user2, variables=account_variables)
@@ -454,3 +453,67 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         assert result["auth"]["register"]["success"] is False
         # The error message should indicate the email is already taken
         assert "email" in result["auth"]["register"]["error"].lower()
+
+    def test_unauthorized_access(self, client):
+        """Test that unauthorized users cannot access protected resources."""
+        # Create a user and plan
+        user = self.get_test_user(client)
+        plan_id, _ = self.create_test_plan(client, user)
+
+        # Try to access the plan with a different user
+        other_user = self.get_test_user(client, email="other@example.com")
+        query = """
+        query GetMoneyPlan($id: GlobalID!) {
+            moneyPlan(id: $id) {
+                id
+                initialBalance
+                remainingBalance
+                accounts {
+                    id
+                    name
+                    buckets {
+                        name
+                        category
+                        allocatedAmount
+                    }
+                }
+            }
+        }
+        """
+
+        result = self.execute_query(client, query, user=other_user, variables={"id": plan_id})
+        assert "errors" not in result
+        assert result["moneyPlan"] is None
+
+        # Try to add an account to the plan with a different user
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        account_variables = {
+            "input": {
+                "planId": plan_id,
+                "name": "Intrusion Account",
+                "buckets": [{"name": "Intrusion", "category": "intrusion", "allocatedAmount": 500.0}],
+            }
+        }
+
+        result = self.execute_query(
+            client, add_account_mutation, user=other_user, variables=account_variables
+        )
+        assert "errors" not in result
+        assert "message" in result["moneyPlan"]["addAccount"]
+        assert "does not exist" in result["moneyPlan"]["addAccount"]["message"]

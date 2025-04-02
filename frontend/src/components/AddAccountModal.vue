@@ -78,7 +78,7 @@
               <span class="label-text">Bucket Name</span>
             </label>
             <input 
-              v-model="bucket.bucketName" 
+              v-model="bucket.name" 
               type="text" 
               placeholder="e.g. Emergency Fund"
               class="input input-bordered input-sm w-full" 
@@ -236,7 +236,7 @@ const selectedExistingAccountId = ref('');
 const accountName = ref('');
 const buckets = ref([
   { 
-    bucketName: '',
+    name: '',
     category: '',
     allocatedAmount: 0
   }
@@ -280,7 +280,7 @@ const isValid = computed(() => {
   
   // Buckets validation - allow zero values but validate names and categories
   const validBuckets = buckets.value.length > 0 && 
-    buckets.value.every(b => b.bucketName.trim() !== '' && b.category && b.allocatedAmount >= 0);
+    buckets.value.every(b => b.name.trim() !== '' && b.category && b.allocatedAmount >= 0);
   
   // Overall balance validation
   const validBalance = remainingBalance.value >= 0;
@@ -294,7 +294,7 @@ watch(buckets, validateTotalAmount, { deep: true });
 // Add/remove bucket methods
 function addBucket() {
   buckets.value.push({
-    bucketName: '',
+    name: '',
     category: '',
     allocatedAmount: 0
   });
@@ -347,10 +347,9 @@ async function addAccount() {
     const variables = { 
       input: {
         planId: props.planId,
-        name: selectedAccountMethod.value === 'new' ? accountName.value : undefined,
-        accountId: selectedAccountMethod.value === 'existing' ? selectedExistingAccountId.value : undefined,
+        name: selectedAccountMethod.value === 'new' ? accountName.value : availableAccounts.value.find(a => a.id === selectedExistingAccountId.value)?.name || '',
         buckets: buckets.value.map(b => ({
-          bucketName: b.bucketName,
+          name: b.name,
           allocatedAmount: Number(b.allocatedAmount),
           category: b.category
         }))
@@ -395,7 +394,7 @@ function resetForm() {
   selectedExistingAccountId.value = '';
   accountName.value = '';
   buckets.value = [{
-    bucketName: '',
+    name: '',
     category: '',
     allocatedAmount: 0
   }];

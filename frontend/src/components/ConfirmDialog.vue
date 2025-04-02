@@ -1,21 +1,23 @@
 <template>
-  <div class="modal is-active" v-if="isOpen">
-    <div class="modal-background" @click="$emit('close')"></div>
-    <div class="modal-card">
-      <header class="modal-card-head">
-        <p class="modal-card-title">{{ title }}</p>
-      </header>
-      <section class="modal-card-body">
-        <p>{{ message }}</p>
-      </section>
-      <footer class="modal-card-foot">
-        <button class="button" @click="$emit('close')">Cancel</button>
-        <button class="button is-danger" @click="$emit('confirm')" :class="{ 'is-loading': isLoading }">
+  <dialog class="modal" :class="{ 'modal-open': isOpen }">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">{{ title }}</h3>
+      <p class="py-4">{{ message }}</p>
+      <div class="modal-action">
+        <button class="btn btn-ghost" @click="$emit('close')">Cancel</button>
+        <button 
+          class="btn btn-error" 
+          @click="$emit('confirm')" 
+          :class="{ 'loading': isLoading }"
+        >
           {{ confirmText }}
         </button>
-      </footer>
+      </div>
     </div>
-  </div>
+    <form method="dialog" class="modal-backdrop" @click="$emit('close')">
+      <button>close</button>
+    </form>
+  </dialog>
 </template>
 
 <script setup lang="ts">

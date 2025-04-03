@@ -54,7 +54,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [
                     {
                         "name": "Savings",
@@ -138,7 +138,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan1_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -180,7 +180,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables2 = {
             "input": {
                 "planId": plan2_id,
-                "name": "Test Account 2",
+                "accountId": self.create_account(client, user, "Test Account 2"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 2000.0}],
             }
         }
@@ -197,7 +197,9 @@ class TestMoneyPlan(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -214,7 +216,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         assert result["moneyPlan"]["initialBalance"] == 1000.0
         assert result["moneyPlan"]["remainingBalance"] == 0.0
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0
 
         # Check second plan
@@ -223,7 +225,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         assert result["moneyPlan"]["initialBalance"] == 2000.0
         assert result["moneyPlan"]["remainingBalance"] == 0.0
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account 2"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account 2"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 2000.0
 
     def test_cannot_create_multiple_uncommitted_plans(self, client, money_planner):
@@ -292,7 +294,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan1_id,
-                "name": "Account 1",
+                "accountId": self.create_account(client, user, "Account 1"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -388,7 +390,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan1_id,
-                    "name": "Checking Account",
+                    "accountId": self.create_account(client, user, "Checking Account"),
                     "buckets": [
                         {"name": "Bills", "category": "expenses", "allocatedAmount": 600.0},
                         {"name": "Food", "category": "expenses", "allocatedAmount": 200.0},
@@ -422,7 +424,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan1_id,
-                    "name": "Savings Account",
+                    "accountId": self.create_account(client, user, "Savings Account"),
                     "buckets": [
                         {"name": "Emergency Fund", "category": "savings", "allocatedAmount": 200.0},
                     ],
@@ -486,7 +488,6 @@ class TestMoneyPlan(TestGraphQLAPI):
                 }
             },
         )
-        assert "errors" not in result
         assert "data" in result["moneyPlan"]["startPlan"]
 
         # Verify the new plan has the same account structure but with zero allocations
@@ -502,7 +503,10 @@ class TestMoneyPlan(TestGraphQLAPI):
                     initialBalance
                     remainingBalance
                     accounts {
-                        name
+                        id
+                        account {
+                            name
+                        }
                         buckets {
                             name
                             category
@@ -522,7 +526,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         # Should have the same number of accounts
         assert len(new_plan["accounts"]) == 2
         # Verify account names and bucket structure were copied
-        accounts = {account["name"]: account for account in new_plan["accounts"]}
+        accounts = {account["account"]["name"]: account for account in new_plan["accounts"]}
 
         # Check first account (Checking Account)
         checking = accounts.get("Checking Account")
@@ -627,7 +631,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Savings Account",
+                "accountId": self.create_account(client, user, "Savings Account"),
                 "buckets": [{"name": "Savings", "category": "savings", "allocatedAmount": 1000.0}],
             }
         }
@@ -645,7 +649,9 @@ class TestMoneyPlan(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -661,7 +667,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         assert result["moneyPlan"]["initialBalance"] == 1000.0
         assert result["moneyPlan"]["remainingBalance"] == 0.0
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Savings Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Savings Account"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Savings"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0
 
@@ -714,7 +720,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Checking Account",
+                "accountId": self.create_account(client, user, "Checking Account"),
                 "buckets": [
                     {"name": "Bills", "category": "expenses", "allocatedAmount": 600.0},
                     {"name": "Food", "category": "expenses", "allocatedAmount": 200.0},
@@ -730,7 +736,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables2 = {
             "input": {
                 "planId": plan_id,
-                "name": "Savings Account",
+                "accountId": self.create_account(client, user, "Savings Account"),
                 "buckets": [
                     {"name": "Emergency Fund", "category": "savings", "allocatedAmount": 200.0},
                 ],
@@ -750,7 +756,9 @@ class TestMoneyPlan(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -769,7 +777,9 @@ class TestMoneyPlan(TestGraphQLAPI):
 
         # Find the checking account
         checking = next(
-            account for account in result["moneyPlan"]["accounts"] if account["name"] == "Checking Account"
+            account
+            for account in result["moneyPlan"]["accounts"]
+            if account["account"]["name"] == "Checking Account"
         )
         buckets = {b["name"]: b for b in checking["buckets"]}
         assert len(buckets) == 2
@@ -778,7 +788,9 @@ class TestMoneyPlan(TestGraphQLAPI):
 
         # Find the savings account
         savings = next(
-            account for account in result["moneyPlan"]["accounts"] if account["name"] == "Savings Account"
+            account
+            for account in result["moneyPlan"]["accounts"]
+            if account["account"]["name"] == "Savings Account"
         )
         assert len(savings["buckets"]) == 1
         assert savings["buckets"][0]["name"] == "Emergency Fund"

@@ -136,7 +136,7 @@ class TestNotesSchema(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan_id,
-                    "name": "Account 1",
+                    "accountId": self.create_account(client, user, "Account 1"),
                     "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
                 }
             },
@@ -339,7 +339,7 @@ class TestNotesSchema(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan_id,
-                    "name": "Account 1",
+                    "accountId": self.create_account(client, user, "Account 1"),
                     "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
                 }
             },

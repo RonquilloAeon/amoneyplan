@@ -60,7 +60,9 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
                 initialBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                 }
             }
         }
@@ -119,6 +121,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         plan_id_user1 = result["moneyPlan"]["startPlan"]["data"]["id"]
 
         # Add an account to this plan
+        account_id = self.create_account(client, user1, "User 1 Account")
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
@@ -136,7 +139,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id_user1,
-                "name": "User 1 Account",
+                "accountId": account_id,
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -153,7 +156,9 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
                 initialBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                 }
             }
         }
@@ -213,6 +218,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
 
         # Add an account to this plan
+        account_id = self.create_account(client, user1, "User 1 Special Account")
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
@@ -227,7 +233,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "User 1 Special Account",
+                "accountId": account_id,
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -273,6 +279,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         plan_id_user1 = result["moneyPlan"]["startPlan"]["data"]["id"]
 
         # Add an account to this plan
+        account_id = self.create_account(client, user1, "User 1 Protected Account")
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
@@ -293,7 +300,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id_user1,
-                "name": "User 1 Protected Account",
+                "accountId": account_id,
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -336,7 +343,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id_user1,
-                "name": "User 2's Intrusion Account",
+                "accountId": account_id_user1,
                 "buckets": [{"name": "Intrusion", "category": "intrusion", "allocatedAmount": 500.0}],
             }
         }
@@ -458,7 +465,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         """Test that unauthorized users cannot access protected resources."""
         # Create a user and plan
         user = self.get_test_user(client)
-        plan_id, _ = self.create_test_plan(client, user)
+        plan_id, account_id = self.create_test_plan(client, user)
 
         # Try to access the plan with a different user
         other_user = self.get_test_user(client, email="other@example.com")
@@ -470,7 +477,9 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -506,7 +515,7 @@ class TestAuthenticationAndAuthorization(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Intrusion Account",
+                "accountId": account_id,
                 "buckets": [{"name": "Intrusion", "category": "intrusion", "allocatedAmount": 500.0}],
             }
         }

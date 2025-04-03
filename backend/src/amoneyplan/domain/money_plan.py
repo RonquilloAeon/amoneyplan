@@ -299,7 +299,7 @@ class MoneyPlan:
                 new_account.buckets[bucket_name] = new_bucket
 
             # Add account to the new plan
-            accounts[account_id] = PlanAccountAllocation(account=new_account)
+            accounts[account_id] = PlanAccountAllocation(account=new_account, name=allocation.name)
 
         return cls(
             id=id,

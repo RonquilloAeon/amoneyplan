@@ -63,7 +63,7 @@ class TestAccountSchema(TestGraphQLAPI):
                 variables={
                     "input": {
                         "planId": plan_id,
-                        "name": account_name,
+                        "accountId": self.create_account(client, user, account_name),
                         "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 100.0}],
                     }
                 },
@@ -152,7 +152,7 @@ class TestAccountSchema(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan_id,
-                    "name": "Test Account",
+                    "accountId": self.create_account(client, user, "Test Account"),
                     "buckets": [
                         {
                             "name": "Savings",
@@ -223,7 +223,9 @@ class TestAccountSchema(TestGraphQLAPI):
                     remainingBalance
                     accounts {
                         id
-                        name
+                        account {
+                            name
+                        }
                         buckets {
                             name
                             category
@@ -350,7 +352,7 @@ class TestAccountSchema(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan_id,
-                    "name": "Test Account",
+                    "accountId": self.create_account(client, user, "Test Account"),
                     "buckets": [
                         {
                             "name": "Savings",
@@ -492,7 +494,7 @@ class TestAccountSchema(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan_id,
-                    "name": "Test Account",
+                    "accountId": self.create_account(client, user, "Test Account"),
                     "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
                 }
             },
@@ -681,7 +683,7 @@ class TestAccountSchema(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [
                     {"name": "Savings", "category": "savings", "allocatedAmount": 500.0},
                     {"name": "Bills", "category": "expenses", "allocatedAmount": 500.0},
@@ -700,7 +702,9 @@ class TestAccountSchema(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         id
                         name
@@ -722,7 +726,7 @@ class TestAccountSchema(TestGraphQLAPI):
         # Verify the account details
         account = plan["accounts"][0]
         assert account["id"] == account_id
-        assert account["name"] == "Test Account"
+        assert account["account"]["name"] == "Test Account"
         assert len(account["buckets"]) == 2
 
         # Verify the bucket details
@@ -780,7 +784,7 @@ class TestAccountSchema(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 800.0}],
             }
         }
@@ -828,7 +832,9 @@ class TestAccountSchema(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         id
                         name
@@ -850,7 +856,7 @@ class TestAccountSchema(TestGraphQLAPI):
         # Verify the account details
         account = plan["accounts"][0]
         assert account["id"] == account_id
-        assert account["name"] == "Test Account"
+        assert account["account"]["name"] == "Test Account"
         assert len(account["buckets"]) == 2
 
         # Verify the bucket details

@@ -78,6 +78,7 @@ class TestGraphQLAPI:
         result = response.json()
 
         if "errors" in result and fail_on_error:
+            __tracebackhide__ = True
             pytest.fail(f"errors returned: {result['errors']}")
 
         return result["data"]
@@ -135,7 +136,7 @@ class TestGraphQLAPI:
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": account_name,
+                "accountId": self.create_account(client, user, account_name),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": initial_balance}],
             }
         }
@@ -193,7 +194,7 @@ class TestGraphQLAPI:
         plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
 
         # Create an account first
-        account_id = self.add_account(client, user, "Test Account")
+        account_id = self.create_account(client, user, "Test Account")
 
         # Add the account to the plan
         add_account_mutation = """

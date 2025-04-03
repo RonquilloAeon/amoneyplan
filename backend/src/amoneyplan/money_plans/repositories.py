@@ -280,50 +280,37 @@ class MoneyPlanRepository:
 
         # Process accounts in domain model
         for account_id, allocation in domain_plan.accounts.items():
-            domain_account = allocation.account
+            domain_plan_account = allocation.account
 
             # Find or create account and plan_account
             if account_id in existing_plan_accounts:
                 # Update existing plan account
                 plan_account = existing_plan_accounts[account_id]
-                plan_account.is_checked = domain_account.is_checked
-                plan_account.notes = domain_account.notes
+                plan_account.is_checked = domain_plan_account.is_checked
+                plan_account.notes = domain_plan_account.notes
                 plan_account.save()
             else:
-                # Create account if needed
-                try:
-                    account = Account.objects.get(id=domain_account.account_id)
-                except Account.DoesNotExist:
-                    account = Account(
-                        id=domain_account.account_id,
-                        name=domain_account.name,
-                        user_account=self._user_account,
-                    )
-                    account.save()
+                account = Account.objects.get(id=domain_plan_account.account_id)
 
                 # Create plan account
                 plan_account = PlanAccount(
                     plan=orm_plan,
                     account=account,
                     user_account=self._user_account,
-                    is_checked=domain_account.is_checked,
-                    notes=domain_account.notes,
+                    is_checked=domain_plan_account.is_checked,
+                    notes=domain_plan_account.notes,
                 )
                 plan_account.save()
 
             # Process buckets for this account
-            self._sync_buckets(domain_account, plan_account)
+            self._sync_buckets(domain_plan_account, plan_account)
 
         # Remove plan accounts that are no longer in the domain model
         domain_account_ids = set(domain_plan.accounts.keys())
         for account_id, plan_account in existing_plan_accounts.items():
             if account_id not in domain_account_ids:
-                # Soft delete the plan account
+                # Delete the plan account
                 plan_account.delete()  # This will cascade and delete associated buckets
-                # Soft delete the underlying account if it's not used in any other plans
-                account = plan_account.account
-                if not account.plan_allocations.filter(deleted_at__isnull=True).exists():
-                    account.delete()
 
     def _sync_buckets(self, domain_account: DomainAccount, plan_account: PlanAccount) -> None:
         """

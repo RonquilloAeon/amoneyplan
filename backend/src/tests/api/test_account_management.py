@@ -35,6 +35,7 @@ class TestAccountManagement(TestGraphQLAPI):
         plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
 
         # Add an account with buckets
+        account_id = self.create_account(client, user, "Test Account")
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
@@ -55,14 +56,12 @@ class TestAccountManagement(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": account_id,
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
 
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
-        assert "errors" not in result
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
 
         # Remove the account
         remove_account_mutation = """
@@ -105,7 +104,9 @@ class TestAccountManagement(TestGraphQLAPI):
                 id
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -118,6 +119,6 @@ class TestAccountManagement(TestGraphQLAPI):
         result = self.execute_query(client, query, user=user, variables={"id": plan_id})
         assert "errors" not in result
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
         assert len(result["moneyPlan"]["accounts"][0]["buckets"]) == 1
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0

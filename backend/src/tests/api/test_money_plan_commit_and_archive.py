@@ -55,7 +55,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -141,7 +141,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan1_id,
-                    "name": "Account 1",
+                    "accountId": self.create_account(client, user, "Account 1"),
                     "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
                 }
             },
@@ -224,7 +224,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan2_id,
-                    "name": "Account 2",
+                    "accountId": self.create_account(client, user, "Account 2"),
                     "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 2000.0}],
                 }
             },
@@ -462,7 +462,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
@@ -504,7 +504,9 @@ class TestMoneyPlan(TestGraphQLAPI):
                 isCommitted
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -521,7 +523,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         assert result["moneyPlan"]["remainingBalance"] == 0.0
         assert result["moneyPlan"]["isCommitted"] is True
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0
 
@@ -574,7 +576,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": self.create_account(client, user, "Test Account"),
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 2000.0}],
             }
         }
@@ -640,7 +642,9 @@ class TestMoneyPlan(TestGraphQLAPI):
                 isArchived
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
                         name
                         category
@@ -658,6 +662,6 @@ class TestMoneyPlan(TestGraphQLAPI):
         assert result["moneyPlan"]["isCommitted"] is True
         assert result["moneyPlan"]["isArchived"] is True
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 2000.0

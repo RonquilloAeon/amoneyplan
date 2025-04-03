@@ -158,6 +158,6 @@ class AuthMutations:
 class AuthQueries:
     @strawberry.field
     def me(self, info: Info) -> UserType | None:
-        if info.context.request.user.is_authenticated:
+        if info.context.request.user and info.context.request.user.is_authenticated:
             return info.context.request.user
         return None

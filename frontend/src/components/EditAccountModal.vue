@@ -190,8 +190,25 @@ interface Bucket {
 interface Account {
   id: string;
   name: string;
-  type: string;
+}
+
+interface PlanAccount {
+  id: string;
+  account: Account;
+  buckets: Bucket[];
+  isChecked: boolean;
   notes?: string;
+}
+
+interface MoneyPlan {
+  id: string;
+  planDate: string;
+  planAccounts: PlanAccount[];
+  isCommitted: boolean;
+  isArchived: boolean;
+  initialBalance: number;
+  remainingBalance: number;
+  notes: string;
 }
 
 const props = defineProps<{

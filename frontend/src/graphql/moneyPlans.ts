@@ -197,7 +197,10 @@ export const MONEY_PLANS_QUERY = gql`
           remainingBalance
           accounts {
             id
-            name
+            account {
+              id
+              name
+            }
             buckets {
               name
               category
@@ -233,7 +236,10 @@ export const MONEY_PLAN_QUERY = gql`
       remainingBalance
       accounts {
         id
-        name
+        account {
+          id
+          name
+        }
         buckets {
           name
           category
@@ -260,7 +266,10 @@ export const DRAFT_MONEY_PLAN_QUERY = gql`
       remainingBalance
       accounts {
         id
-        name
+        account {
+          id
+          name
+        }
         buckets {
           name
           category

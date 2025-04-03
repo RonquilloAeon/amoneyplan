@@ -107,7 +107,7 @@
               <AccountCard
                 v-for="account in draftPlan.accounts" 
                 :key="account.id"
-                :account="account"
+                :account="account.account"
                 :buckets="account.buckets"
                 :is-checked="account.isChecked"
                 :plan-initial-balance="draftPlan.initialBalance"
@@ -251,15 +251,20 @@ interface Bucket {
 interface Account {
   id: string;
   name: string;
+}
+
+interface PlanAccount {
+  id: string;
+  account: Account;
   buckets: Bucket[];
-  notes: string;
   isChecked: boolean;
+  notes?: string;
 }
 
 interface MoneyPlan {
   id: string;
   planDate: string;
-  accounts: Account[];
+  accounts: PlanAccount[];
   isCommitted: boolean;
   isArchived: boolean;
   initialBalance: number;
@@ -277,8 +282,8 @@ const showStartPlanDialog = ref(false);
 const showAddAccountModal = ref(false);
 const showEditAccountModal = ref(false);
 const showEditPlanNotes = ref(false);
-const accountToEdit = ref<Account | null>(null);
-const accountForNotes = ref<Account | null>(null);
+const accountToEdit = ref<PlanAccount | null>(null);
+const accountForNotes = ref<PlanAccount | null>(null);
 const draftPlan = ref<MoneyPlan | null>(null);
 const isCommittingPlan = ref(false);
 const isArchivingPlan = ref(false);
@@ -288,7 +293,7 @@ const toast = ref<Toast>({
   type: 'alert-info'
 });
 const showConfirmDialog = ref(false);
-const accountToRemove = ref<Account | null>(null);
+const accountToRemove = ref<PlanAccount | null>(null);
 const isRemovingAccount = ref(false);
 
 const { data, error, executeQuery } = useQuery({
@@ -344,7 +349,7 @@ function handleAccountAdded(updatedPlanData: any) {
 }
 
 // Calculate the total amount allocated for an account
-function calculateAccountTotal(account: Account): number {
+function calculateAccountTotal(account: PlanAccount): number {
   return account.buckets.reduce((total, bucket) => total + bucket.allocatedAmount, 0);
 }
 
@@ -422,7 +427,7 @@ async function archivePlan() {
   }
 }
 
-function editAccount(account: Account) {
+function editAccount(account: PlanAccount) {
   accountToEdit.value = account;
   showEditAccountModal.value = true;
 }
@@ -432,7 +437,7 @@ function closeEditModal() {
   accountToEdit.value = null;
 }
 
-async function confirmRemoveAccount(account: Account) {
+async function confirmRemoveAccount(account: PlanAccount) {
   accountToRemove.value = account;
   showConfirmDialog.value = true;
 }
@@ -461,8 +466,8 @@ async function removeAccount() {
     
     if (result.data?.moneyPlan?.removeAccount?.success) {
       const updatedPlan = result.data.moneyPlan.removeAccount.moneyPlan;
-      handleAccountAdded(updatedPlan); // Reuse existing function to update the plan
-      showToast(`Account "${accountToRemove.value.name}" removed successfully`, 'alert-success');
+      handleAccountAdded(updatedPlan);
+      showToast(`Account "${accountToRemove.value.account.name}" removed successfully`, 'alert-success');
     }
   } catch (error) {
     showToast((error as Error).message, 'alert-error');
@@ -473,11 +478,11 @@ async function removeAccount() {
   }
 }
 
-function editAccountNotes(account: Account) {
+function editAccountNotes(account: PlanAccount) {
   accountForNotes.value = account;
 }
 
-async function toggleAccountCheck(account: Account) {
+async function toggleAccountCheck(account: PlanAccount) {
   try {
     const result = await executeAccountCheckMutation({
       input: {
@@ -500,8 +505,8 @@ async function toggleAccountCheck(account: Account) {
       
       // Show a toast based on the new state
       const message = account.isChecked ? 
-        `Unchecked account: ${account.name}` : 
-        `Checked account: ${account.name}`;
+        `Unchecked account: ${account.account.name}` : 
+        `Checked account: ${account.account.name}`;
       showToast(message, 'alert-success');
     } else {
       const errorMessage = response?.message || 'Failed to update account status';

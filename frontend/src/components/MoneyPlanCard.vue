@@ -112,8 +112,6 @@ interface Bucket {
 interface Account {
   id: string;
   name: string;
-  type: string;
-  notes?: string;
 }
 
 interface PlanAccount {
@@ -121,6 +119,7 @@ interface PlanAccount {
   account: Account;
   buckets: Bucket[];
   isChecked: boolean;
+  notes?: string;
 }
 
 interface MoneyPlan {

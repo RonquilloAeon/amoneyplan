@@ -80,8 +80,6 @@ interface Bucket {
 interface Account {
   id: string;
   name: string;
-  type: string;
-  notes?: string;
 }
 
 interface PlanAccount {
@@ -89,6 +87,7 @@ interface PlanAccount {
   account: Account;
   buckets: Bucket[];
   isChecked: boolean;
+  notes?: string;
 }
 
 interface MoneyPlan {
@@ -126,8 +125,6 @@ const MONEY_PLANS_QUERY = `
         account {
           id
           name
-          type
-          notes
         }
         buckets {
           id
@@ -173,7 +170,7 @@ function handlePlanUpdated(updatedPlan: MoneyPlan) {
 }
 
 function handleEditAccount(planAccount: PlanAccount) {
-  // TODO: Implement account editing
+  editAccountNotes(planAccount);
 }
 
 function handleRemoveAccount(planAccount: PlanAccount) {
@@ -182,6 +179,14 @@ function handleRemoveAccount(planAccount: PlanAccount) {
 
 function addPlan(newPlan: MoneyPlan) {
   showToast('New plan created successfully');
+}
+
+function editAccountNotes(planAccount: PlanAccount) {
+  // Implementation needed
+}
+
+async function toggleAccountCheck(planAccount: PlanAccount) {
+  // Implementation needed
 }
 </script>
 

@@ -14,6 +14,7 @@ class Account(TenantScopedModel):
     """Account entity that can be shared across money plans."""
 
     name = models.CharField(max_length=255)
+    notes = models.TextField(blank=True)
 
     class Meta(BaseModel.Meta):
         constraints = [

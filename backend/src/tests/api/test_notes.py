@@ -502,6 +502,7 @@ class TestNotesSchema(TestGraphQLAPI):
         plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
 
         # Add an account with notes
+        account_id = self.create_account(client, user, "Test Account")
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
@@ -522,7 +523,7 @@ class TestNotesSchema(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": account_id,
                 "notes": "Test account notes",
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
@@ -541,7 +542,9 @@ class TestNotesSchema(TestGraphQLAPI):
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     notes
                     buckets {
                         name
@@ -558,7 +561,7 @@ class TestNotesSchema(TestGraphQLAPI):
         assert result["moneyPlan"]["initialBalance"] == 1000.0
         assert result["moneyPlan"]["remainingBalance"] == 0.0
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
         assert result["moneyPlan"]["accounts"][0]["notes"] == "Test account notes"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
         assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0

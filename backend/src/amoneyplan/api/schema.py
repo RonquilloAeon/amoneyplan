@@ -20,7 +20,7 @@ from amoneyplan.domain.money_plan import (
 from amoneyplan.money_plans.models import Account as OrmAccount
 from amoneyplan.money_plans.models import MoneyPlan as OrmMoneyPlan
 from amoneyplan.money_plans.models import PlanAccount as OrmPlanAccount
-from amoneyplan.money_plans.use_cases import MoneyPlanUseCases
+from amoneyplan.money_plans.use_cases import AccountUseCases, MoneyPlanUseCases
 
 logger = logging.getLogger("amoneyplan")
 
@@ -60,6 +60,26 @@ class Account(relay.Node):
     id: relay.NodeID[str]
     name: str
 
+    @staticmethod
+    def from_domain(domain_account) -> "Account":
+        """
+        Create an Account instance from a domain Account model.
+        """
+        return Account(
+            id=domain_account.id,
+            name=domain_account.name,
+        )
+
+    @staticmethod
+    def from_orm(orm_account) -> "Account":
+        """
+        Create an Account instance from an ORM Account model.
+        """
+        return Account(
+            id=str(orm_account.id),
+            name=orm_account.name,
+        )
+
 
 @strawberry.type
 class PlanAccount(relay.Node):
@@ -68,7 +88,7 @@ class PlanAccount(relay.Node):
     """
 
     id: relay.NodeID[str]
-    name: str
+    account: Account
     buckets: List[Bucket]
     is_checked: bool
     notes: str = ""
@@ -83,7 +103,10 @@ class PlanAccount(relay.Node):
     def from_domain(domain_account) -> "PlanAccount":
         account = PlanAccount(
             id=domain_account.account_id,
-            name=domain_account.name,
+            account=Account(
+                id=domain_account.account_id,
+                name=domain_account.name,
+            ),
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
             is_checked=domain_account.is_checked,
             notes=domain_account.notes,
@@ -109,7 +132,7 @@ class PlanAccount(relay.Node):
         orm_account = orm_plan_account.account
         account = PlanAccount(
             id=str(orm_account.id),
-            name=orm_account.name,
+            account=Account.from_domain(orm_account),
             buckets=buckets,
             is_checked=orm_plan_account.is_checked,
             notes=orm_plan_account.notes,
@@ -149,7 +172,17 @@ class MoneyPlan(relay.Node):
             initial_balance=domain_plan.initial_balance.as_float,
             remaining_balance=domain_plan.remaining_balance.as_float,
             accounts=[
-                PlanAccount.from_domain(allocation.account) for allocation in domain_plan.accounts.values()
+                PlanAccount(
+                    id=allocation.account.account_id,
+                    account=Account(
+                        id=allocation.account.account_id,
+                        name=allocation.name,
+                    ),
+                    buckets=[Bucket.from_domain(bucket) for bucket in allocation.account.buckets.values()],
+                    is_checked=allocation.account.is_checked,
+                    notes=allocation.account.notes,
+                )
+                for allocation in domain_plan.accounts.values()
             ],
             notes=domain_plan.notes,
             is_committed=domain_plan.committed,
@@ -221,13 +254,11 @@ class BucketConfigInput:
 @strawberry.input
 class AccountAllocationConfigInput:
     account_id: Optional[str] = None
-    name: str
     buckets: List[BucketConfigInput]
 
     def to_domain(self) -> AccountAllocationConfig:
         return AccountAllocationConfig(
             account_id=self.account_id if self.account_id else None,
-            account_name=self.name,
             buckets=[bucket.to_domain() for bucket in self.buckets],
         )
 
@@ -266,9 +297,9 @@ class AccountConfigurationChangeInput:
 @strawberry.input
 class AddAccountInput:
     plan_id: relay.GlobalID
-    name: str
+    account_id: relay.GlobalID
+    buckets: List[BucketConfigInput]
     notes: str = ""
-    buckets: Optional[List[BucketConfigInput]] = None
 
 
 @strawberry.input
@@ -313,6 +344,52 @@ class EditAccountNotesInput:
     plan_id: relay.GlobalID
     account_id: relay.GlobalID
     notes: str
+
+
+@strawberry.input
+class CreateAccountInput:
+    name: str
+    notes: str = ""
+
+
+@strawberry.input
+class UpdateAccountInput:
+    account_id: relay.GlobalID
+    name: str
+    notes: str = ""
+
+
+@strawberry.type
+class AccountQueries:
+    @strawberry.field
+    def list(self, info: Info) -> List[Account]:
+        """
+        Get all accounts for the current user.
+        """
+        if not info.context.request.user.is_authenticated:
+            return []
+
+        use_case = AccountUseCases()
+        result = use_case.get_all_accounts()
+
+        if result.success:
+            return [Account.from_domain(account) for account in result.data]
+        return []
+
+    @strawberry.field
+    def get(self, info: Info, id: relay.GlobalID) -> Optional[Account]:
+        """
+        Get an account by ID.
+        """
+        if not info.context.request.user.is_authenticated:
+            return None
+
+        use_case = AccountUseCases()
+        result = use_case.get_account(id.node_id)
+
+        if result.success:
+            return Account.from_domain(result.data)
+        return None
 
 
 # GraphQL queries
@@ -369,6 +446,8 @@ class Query(AuthQueries):
         if id:
             plan_id = id.node_id
             plan_result = use_case.get_plan(plan_id)
+
+            print("S>>", plan_result, plan_result.success, plan_result.has_data)
 
             if plan_result.success and plan_result.has_data():
                 return MoneyPlan.from_domain(plan_result.data)
@@ -493,6 +572,10 @@ class Query(AuthQueries):
                     end_cursor=None,
                 ),
             )
+
+    @strawberry.field
+    def account(self, info: Info) -> AccountQueries:
+        return AccountQueries()
 
 
 # GraphQL mutations
@@ -650,8 +733,9 @@ class MoneyPlanMutations:
         """
         use_case = MoneyPlanUseCases()
 
+        account_id = input.account_id.node_id
         plan_id = input.plan_id.node_id
-        logger.info(f"Adding account '{input.name}' to plan {plan_id}")
+        logger.info(f"Adding account '{account_id}' to plan {plan_id}")
 
         buckets = None
         if input.buckets:
@@ -673,7 +757,7 @@ class MoneyPlanMutations:
 
             # Call add_account method which now returns UseCaseResult
             account_result = use_case.add_account(
-                plan_id=plan_id, name=input.name, buckets=buckets, notes=input.notes
+                plan_id=plan_id, account_id=account_id, buckets=buckets, notes=input.notes
             )
 
             if not account_result.success:
@@ -685,7 +769,7 @@ class MoneyPlanMutations:
             try:
                 # Query for PlanAccount
                 # It's ok to use ORM here, following CQRS pattern
-                plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_result.data)
+                plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_id)
 
                 return graphql_common.Success.from_node(
                     PlanAccount.from_orm(plan_account),
@@ -878,6 +962,62 @@ class MoneyPlanMutations:
 
 
 @strawberry.type
+class AccountMutations:
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    @graphql_common.gql_error_handler
+    def create(self, info: Info, input: CreateAccountInput) -> graphql_common.MutationResponse:
+        """
+        Create a new account.
+        """
+        use_case = AccountUseCases()
+
+        try:
+            result = use_case.create_account(
+                name=input.name,
+                notes=input.notes,
+            )
+
+            if not result.success:
+                return graphql_common.ApplicationError(message=result.message)
+
+            return graphql_common.Success.from_node(
+                Account.from_domain(result.data),
+                is_message_displayable=True,
+                message="Account created successfully.",
+            )
+        except Exception as e:
+            logger.error(f"Error creating account: {e}", exc_info=True)
+            return graphql_common.ApplicationError(message=str(e))
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    @graphql_common.gql_error_handler
+    def update(self, info: Info, input: UpdateAccountInput) -> graphql_common.MutationResponse:
+        """
+        Update an existing account.
+        """
+        use_case = AccountUseCases()
+
+        try:
+            result = use_case.update_account(
+                account_id=input.account_id.node_id,
+                name=input.name,
+                notes=input.notes,
+            )
+
+            if not result.success:
+                return graphql_common.ApplicationError(message=result.message)
+
+            return graphql_common.Success.from_node(
+                Account.from_domain(result.data),
+                is_message_displayable=True,
+                message="Account updated successfully.",
+            )
+        except Exception as e:
+            logger.error(f"Error updating account: {e}", exc_info=True)
+            return graphql_common.ApplicationError(message=str(e))
+
+
+@strawberry.type
 class Mutation:
     @strawberry.field
     def money_plan(self, info: Info) -> MoneyPlanMutations:
@@ -886,6 +1026,10 @@ class Mutation:
     @strawberry.field
     def auth(self, info: Info) -> AuthMutations:
         return AuthMutations()
+
+    @strawberry.field
+    def account(self, info: Info) -> AccountMutations:
+        return AccountMutations()
 
 
 schema = strawberry.federation.Schema(query=Query, mutation=Mutation, extensions=[DjangoOptimizerExtension])

@@ -192,7 +192,10 @@ class TestGraphQLAPI:
         result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
         plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
 
-        # Add an account
+        # Create an account first
+        account_id = self.add_account(client, user, "Test Account")
+
+        # Add the account to the plan
         add_account_mutation = """
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
@@ -213,12 +216,33 @@ class TestGraphQLAPI:
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
+                "accountId": account_id,
                 "buckets": [{"name": "Default", "category": "default", "allocatedAmount": initial_balance}],
             }
         }
 
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
-
         return plan_id, account_id
+
+    def create_account(self, client: Client, user: TestUser, name: str) -> str:
+        """Helper method to create an account and return its ID."""
+        add_account_mutation = """
+        mutation CreateAccount($input: CreateAccountInput!) {
+            account {
+                create(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        variables = {"input": {"name": name}}
+        result = self.execute_query(client, add_account_mutation, user=user, variables=variables)
+        return result["account"]["create"]["data"]["id"]

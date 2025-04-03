@@ -6,11 +6,18 @@ from django.db import transaction
 
 from amoneyplan.common.models import generate_safe_cuid16
 from amoneyplan.common.use_cases import UseCaseResult
+from amoneyplan.domain.account import Account as DomainAccount
 from amoneyplan.domain.money import Money
-from amoneyplan.domain.money_plan import MoneyPlan as DomainMoneyPlan
+from amoneyplan.domain.money_plan import (
+    AccountAllocationConfig as DomainAccountAllocationConfig,
+)
+from amoneyplan.domain.money_plan import (
+    MoneyPlan as DomainMoneyPlan,
+)
 
 from .models import MoneyPlan
 from .repositories import (
+    AccountRepository,
     MoneyPlanRepository,
 )
 
@@ -63,6 +70,111 @@ class InvalidPlanStateError(MoneyPlanError):
     pass
 
 
+class AccountUseCases:
+    """Use cases for Account entity."""
+
+    def __init__(self):
+        self.account_repo = AccountRepository()
+
+    def get_account(self, account_id: str) -> UseCaseResult[DomainAccount]:
+        """
+        Get an account by ID.
+
+        Args:
+            account_id: The ID of the account to retrieve
+
+        Returns:
+            UseCaseResult containing the account or error information
+        """
+        try:
+            account = self.account_repo.get_by_id(account_id)
+            if not account:
+                return UseCaseResult.failure(error=f"Account with ID {account_id} not found")
+            return UseCaseResult.success(data=account)
+        except Exception as e:
+            logger.error(f"Error getting account: {e}", exc_info=True)
+            return UseCaseResult.failure(error=e)
+
+    def get_all_accounts(self) -> UseCaseResult[List[DomainAccount]]:
+        """
+        Get all accounts for the current user.
+
+        Returns:
+            UseCaseResult containing the list of accounts or error information
+        """
+        try:
+            accounts = self.account_repo.get_all()
+            return UseCaseResult.success(data=accounts)
+        except Exception as e:
+            logger.error(f"Error getting accounts: {e}", exc_info=True)
+            return UseCaseResult.failure(error=e)
+
+    @transaction.atomic
+    def create_account(self, name: str, notes: str = "") -> UseCaseResult[DomainAccount]:
+        """
+        Create a new account.
+
+        Args:
+            name: The name of the account
+            notes: Optional notes for the account
+
+        Returns:
+            UseCaseResult containing the created account or error information
+        """
+        try:
+            # Generate a new account ID
+            account_id = generate_safe_cuid16()
+
+            # Create the domain model
+            account = DomainAccount.create(
+                account_id,
+                name=name,
+                notes=notes,
+            )
+
+            # Save the account
+            self.account_repo.save(account)
+
+            return UseCaseResult.success(data=account)
+        except Exception as e:
+            logger.error(f"Error creating account: {e}", exc_info=True)
+            return UseCaseResult.failure(error=e)
+
+    @transaction.atomic
+    def update_account(self, account_id: str, name: str, notes: str = "") -> UseCaseResult[DomainAccount]:
+        """
+        Update an existing account.
+
+        Args:
+            account_id: The ID of the account to update
+            name: The new name for the account
+            notes: Optional new notes for the account
+
+        Returns:
+            UseCaseResult containing the updated account or error information
+        """
+        try:
+            # Get the existing account
+            account_result = self.get_account(account_id)
+            if not account_result.success:
+                return account_result
+
+            account = account_result.data
+
+            # Update the account
+            # TODO move to domain
+            account.name = name
+            account.notes = notes
+
+            # Save the account
+            self.account_repo.save(account)
+
+            return UseCaseResult.success(data=account)
+        except Exception as e:
+            logger.error(f"Error updating account: {e}", exc_info=True)
+            return UseCaseResult.failure(error=e)
+
+
 # Value objects
 class BucketConfig:
     """Configuration for a bucket."""
@@ -76,14 +188,14 @@ class BucketConfig:
 class AccountAllocationConfig:
     """Configuration for an account allocation in a Money Plan."""
 
-    def __init__(self, account_id: str, name: str, buckets: List[BucketConfig] = None):
+    def __init__(self, account_id: str, buckets: List[BucketConfig] = None):
         self.account_id = account_id
-        self.name = name
         self.buckets = buckets or []
 
 
 class MoneyPlanUseCases:
     def __init__(self):
+        self.account_repo = AccountRepository()
         self.money_plan_repo = MoneyPlanRepository()
 
     def _get_current_plan_id(self) -> Optional[str]:
@@ -130,6 +242,19 @@ class MoneyPlanUseCases:
                             "There is already an uncommitted plan. Commit it before creating a new one."
                         )
                     )
+
+            # Verify all accounts in default_allocations exist
+            allocations = []
+
+            if default_allocations:
+                for config in default_allocations:
+                    account = self.account_repo.get_by_id(config.account_id)
+                    if not account:
+                        return UseCaseResult.failure(
+                            AccountNotFoundError(f"Account with ID {config.account_id} does not exist")
+                        )
+
+                    allocations.append(DomainAccountAllocationConfig(**config, account_name=account.name))
 
             with transaction.atomic():
                 # Generate a new ID for the plan
@@ -196,21 +321,21 @@ class MoneyPlanUseCases:
 
     @transaction.atomic
     def add_account(
-        self, plan_id: str, name: str, buckets: Optional[List[BucketConfig]] = None, notes: str = ""
-    ) -> UseCaseResult[str]:
+        self, plan_id: str, account_id: str, buckets: Optional[List[BucketConfig]] = None, notes: str = ""
+    ) -> UseCaseResult:
         """
         Add a new account to a plan.
 
         Args:
             plan_id: The ID of the plan to add the account to
-            name: The name of the account
+            name: The ID of the account being added
             buckets: Optional list of bucket configurations
             notes: Optional notes for the account
 
         Returns:
             UseCaseResult containing the ID of the new account or error information
         """
-        logger.info("Adding account %s to plan %s", name, plan_id)
+        logger.info("Adding account %s to plan %s", account_id, plan_id)
 
         try:
             # Get the domain model from repository
@@ -220,16 +345,20 @@ class MoneyPlanUseCases:
 
             plan = plan_result.data
 
-            # Generate a new account ID using cuid16
-            account_id = generate_safe_cuid16()
+            # Get the account as well
+            account = self.account_repo.get_by_id(account_id)
+            if not account:
+                return UseCaseResult.failure(
+                    AccountNotFoundError(f"Account with ID {account_id} does not exist")
+                )
 
             # Use the domain model's add_account method
-            plan.add_account(account_id=account_id, name=name, buckets=buckets, notes=notes)
+            plan.add_account(account_id=account_id, account_name=account.name, buckets=buckets, notes=notes)
 
             # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
 
-            return UseCaseResult.success(data=account_id)
+            return UseCaseResult.success()
         except MoneyPlanError as e:
             return UseCaseResult.failure(error=e)
         except Exception as e:

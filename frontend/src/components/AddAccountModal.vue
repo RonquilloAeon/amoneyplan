@@ -13,48 +13,28 @@
       
       <form @submit.prevent="addAccount">
         <!-- Account selector -->
-        <div class="form-control w-full mb-4">
-          <label class="label py-1">
-            <span class="label-text">Account Selection</span>
-          </label>
-          <select 
-            v-model="selectedAccountMethod" 
-            class="select select-bordered w-full"
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700">Select Account</label>
+          <select
+            v-model="selectedAccountId"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            :class="{ 'border-red-500': errorMessage }"
           >
-            <option value="new">Create New Account</option>
-            <option value="existing">Use Existing Account</option>
-          </select>
-        </div>
-        
-        <!-- New account name input -->
-        <div v-if="selectedAccountMethod === 'new'" class="form-control w-full mb-4">
-          <label class="label py-1">
-            <span class="label-text">New Account Name</span>
-          </label>
-          <input 
-            v-model="accountName" 
-            type="text" 
-            placeholder="e.g. Chase Checking"
-            class="input input-bordered w-full" 
-            required 
-          />
-        </div>
-        
-        <!-- Existing account selector -->
-        <div v-if="selectedAccountMethod === 'existing'" class="form-control w-full mb-4">
-          <label class="label py-1">
-            <span class="label-text">Select Existing Account</span>
-          </label>
-          <select 
-            v-model="selectedExistingAccountId" 
-            class="select select-bordered w-full"
-            required
-          >
-            <option disabled value="">Select an account</option>
+            <option value="">Select an account</option>
             <option v-for="account in availableAccounts" :key="account.id" :value="account.id">
               {{ account.name }}
             </option>
           </select>
+        </div>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700">Notes</label>
+          <textarea
+            v-model="notes"
+            rows="3"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            placeholder="Add any notes about this account in the plan..."
+          ></textarea>
         </div>
         
         <div class="divider">Buckets</div>
@@ -95,45 +75,45 @@
               class="select select-bordered select-sm w-full"
               required
             >
-                <option disabled value="">Select category</option>
-                <option value="Allowance">Allowance</option>
-                <option value="Beauty">Beauty</option>
-                <option value="Bills">Bills</option>
-                <option value="Cash">Cash</option>
-                <option value="Checking">Checking</option>
-                <option value="Childcare">Childcare</option>
-                <option value="Clothing">Clothing</option>
-                <option value="Credit Card">Credit Card</option>
-                <option value="Dining">Dining</option>
-                <option value="Donations">Donations</option>
-                <option value="Dry Powder">Dry Powder</option>
-                <option value="Education">Education</option>
-                <option value="Emergency Fund">Emergency Fund</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="Family">Family</option>
-                <option value="Fitness">Fitness</option>
-                <option value="Fun">Fun</option>
-                <option value="Gifts">Gifts</option>
-                <option value="Groceries">Groceries</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Hobbies">Hobbies</option>
-                <option value="Insurance">Insurance</option>
-                <option value="Investing">Investing</option>
-                <option value="Loan">Loan</option>
-                <option value="Misc">Misc</option>
-                <option value="Mortgage">Mortgage</option>
-                <option value="Other">Other</option>
-                <option value="Personal Care">Personal Care</option>
-                <option value="Pets">Pets</option>
-                <option value="Remittance">Remittance</option>
-                <option value="Rent">Rent</option>
-                <option value="Savings">Savings</option>
-                <option value="Subscriptions">Subscriptions</option>
-                <option value="Taxes">Travel</option>
-                <option value="Transportation">Transportation</option>
-                <option value="Travel">Travel</option>
-                <option value="Unexpected">Unexpected</option>
-                <option value="Utilities">Utilities</option>
+              <option disabled value="">Select category</option>
+              <option value="Allowance">Allowance</option>
+              <option value="Beauty">Beauty</option>
+              <option value="Bills">Bills</option>
+              <option value="Cash">Cash</option>
+              <option value="Checking">Checking</option>
+              <option value="Childcare">Childcare</option>
+              <option value="Clothing">Clothing</option>
+              <option value="Credit Card">Credit Card</option>
+              <option value="Dining">Dining</option>
+              <option value="Donations">Donations</option>
+              <option value="Dry Powder">Dry Powder</option>
+              <option value="Education">Education</option>
+              <option value="Emergency Fund">Emergency Fund</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Family">Family</option>
+              <option value="Fitness">Fitness</option>
+              <option value="Fun">Fun</option>
+              <option value="Gifts">Gifts</option>
+              <option value="Groceries">Groceries</option>
+              <option value="Healthcare">Healthcare</option>
+              <option value="Hobbies">Hobbies</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Investing">Investing</option>
+              <option value="Loan">Loan</option>
+              <option value="Misc">Misc</option>
+              <option value="Mortgage">Mortgage</option>
+              <option value="Other">Other</option>
+              <option value="Personal Care">Personal Care</option>
+              <option value="Pets">Pets</option>
+              <option value="Remittance">Remittance</option>
+              <option value="Rent">Rent</option>
+              <option value="Savings">Savings</option>
+              <option value="Subscriptions">Subscriptions</option>
+              <option value="Taxes">Travel</option>
+              <option value="Transportation">Transportation</option>
+              <option value="Travel">Travel</option>
+              <option value="Unexpected">Unexpected</option>
+              <option value="Utilities">Utilities</option>
             </select>
           </div>
           
@@ -228,12 +208,9 @@ onMounted(() => {
   });
 });
 
-// Account selection
-const selectedAccountMethod = ref('new');
-const selectedExistingAccountId = ref('');
-
 // Form state
-const accountName = ref('');
+const selectedAccountId = ref('');
+const notes = ref('');
 const buckets = ref([
   { 
     name: '',
@@ -273,19 +250,10 @@ const remainingBalance = computed(() => {
 });
 
 const isValid = computed(() => {
-  // Basic form validation
-  const validAccountInfo = 
-    (selectedAccountMethod.value === 'new' && accountName.value.trim() !== '') || 
-    (selectedAccountMethod.value === 'existing' && !!selectedExistingAccountId.value);
-  
-  // Buckets validation - allow zero values but validate names and categories
-  const validBuckets = buckets.value.length > 0 && 
-    buckets.value.every(b => b.name.trim() !== '' && b.category && b.allocatedAmount >= 0);
-  
-  // Overall balance validation
-  const validBalance = remainingBalance.value >= 0;
-  
-  return validAccountInfo && validBuckets && validBalance;
+  return !!selectedAccountId.value && 
+    buckets.value.length > 0 && 
+    buckets.value.every(b => b.name.trim() !== '' && b.category && b.allocatedAmount >= 0) &&
+    remainingBalance.value >= 0;
 });
 
 // Watch for changes in bucket amounts
@@ -314,7 +282,7 @@ function validateTotalAmount() {
   }
 }
 
-// GraphQL mutation - Updated to match the backend schema
+// GraphQL mutation
 const ADD_ACCOUNT_MUTATION = gql`
   mutation addAccount($input: AddAccountInput!) {
     moneyPlan {
@@ -343,11 +311,11 @@ async function addAccount() {
   errorMessage.value = '';
 
   try {
-    // Construct mutation input based on whether we're using a new or existing account
     const variables = { 
       input: {
         planId: props.planId,
-        name: selectedAccountMethod.value === 'new' ? accountName.value : availableAccounts.value.find(a => a.id === selectedExistingAccountId.value)?.name || '',
+        accountId: selectedAccountId.value,
+        notes: notes.value,
         buckets: buckets.value.map(b => ({
           name: b.name,
           allocatedAmount: Number(b.allocatedAmount),
@@ -390,9 +358,8 @@ async function addAccount() {
 }
 
 function resetForm() {
-  selectedAccountMethod.value = 'new';
-  selectedExistingAccountId.value = '';
-  accountName.value = '';
+  selectedAccountId.value = '';
+  notes.value = '';
   buckets.value = [{
     name: '',
     category: '',

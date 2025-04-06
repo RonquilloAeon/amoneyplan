@@ -1,3 +1,5 @@
+import logging
+
 import strawberry
 from allauth.socialaccount.helpers import complete_social_login
 from allauth.socialaccount.models import SocialApp
@@ -11,14 +13,16 @@ from amoneyplan.accounts.models import Account, AccountMembership, User
 
 from .auth import generate_token
 
+logger = logging.getLogger(__name__)
+
 
 @strawberry.type
 class UserType:
     id: strawberry.ID
     username: str
     email: str
-    first_name: str
-    last_name: str
+    firstName: str
+    lastName: str
 
 
 @strawberry.type
@@ -158,6 +162,24 @@ class AuthMutations:
 class AuthQueries:
     @strawberry.field
     def me(self, info: Info) -> UserType | None:
+        logger.info(f"Me query - Request user: {info.context.request.user}")
+        logger.info(
+            "Me query - User authenticated: "
+            "{info.context.request.user.is_authenticated if info.context.request.user else False}"
+        )
+        logger.info(f"Me query - User class: {type(info.context.request.user)}")
+        logger.info(f"Me query - Request headers: {info.context.request.headers}")
+
         if info.context.request.user and info.context.request.user.is_authenticated:
-            return info.context.request.user
+            logger.info(f"Me query - Returning user: {info.context.request.user.username}")
+            user_data = UserType(
+                id=info.context.request.user.id,
+                username=info.context.request.user.username,
+                email=info.context.request.user.email,
+                firstName=info.context.request.user.first_name,
+                lastName=info.context.request.user.last_name,
+            )
+            logger.info(f"Me query - User data: {user_data}")
+            return user_data
+        logger.info("Me query - No authenticated user found, returning None")
         return None

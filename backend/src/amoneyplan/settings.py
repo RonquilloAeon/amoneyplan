@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     # Local apps
     "amoneyplan.accounts",
+    "amoneyplan.api",
     "amoneyplan.money_plans",
 ]
 
@@ -149,8 +150,10 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # In development allow all origins
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Vite dev server
+    "http://localhost:5174",  # Alternative Vite port
     "http://localhost:8000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",  # Alternative Vite port
     "http://127.0.0.1:8000",
 ]
 

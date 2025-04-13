@@ -6,9 +6,6 @@ export const GET_ACCOUNTS = gql`
     accounts {
       id
       name
-      balance
-      accountType
-      currency
     }
   }
 `;

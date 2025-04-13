@@ -1,19 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
+import { useSession } from 'next-auth/react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { usePlans } from '@/lib/hooks/usePlans';
-import { Textarea } from './ui/textarea';
+import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
-import { Alert, AlertDescription } from './ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function StartPlanModal() {
+  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [initialBalance, setInitialBalance] = useState('');
   const [notes, setNotes] = useState('');
+  const [date, setDate] = useState<Date>(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +28,12 @@ export function StartPlanModal() {
       return;
     }
 
+    // Make sure user is authenticated
+    if (!session) {
+      setError('You must be logged in to start a plan');
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
     
@@ -32,11 +41,13 @@ export function StartPlanModal() {
       await createPlan({
         initialBalance: parseFloat(initialBalance),
         notes: notes,
+        planDate: date.toISOString().split('T')[0],
       });
       
       // Reset form and close modal
       setInitialBalance('');
       setNotes('');
+      setDate(new Date());
       setOpen(false);
       
       // Refresh draft plan data
@@ -57,9 +68,9 @@ export function StartPlanModal() {
       <DialogTrigger asChild>
         <Button>Start New Plan</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-white dark:bg-gray-950">
         <DialogHeader>
-          <DialogTitle>Create New Money Plan</DialogTitle>
+          <DialogTitle>Start New Money Plan</DialogTitle>
           <DialogDescription>
             Start a fresh plan to allocate your finances.
           </DialogDescription>
@@ -81,6 +92,23 @@ export function StartPlanModal() {
               placeholder="0.00"
               value={initialBalance}
               onChange={(e) => setInitialBalance(e.target.value)}
+              disabled={isSubmitting}
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="plan-date" className="text-right">
+              Plan Date
+            </Label>
+            <Input
+              id="plan-date"
+              type="date"
+              className="col-span-3"
+              value={date.toISOString().split('T')[0]}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setDate(new Date(e.target.value));
+                }
+              }}
               disabled={isSubmitting}
             />
           </div>

@@ -21,7 +21,7 @@ import {
   Loader2,
   Trash2
 } from 'lucide-react';
-import { StartPlanModal } from '@/components/StartPlanModal';
+import { StartPlanModal } from '../../components/StartPlanModal';
 import { 
   Select, 
   SelectContent, 
@@ -29,6 +29,7 @@ import {
   SelectTrigger, 
   SelectValue
 } from '@/components/ui/select';
+import { AddAccountModal } from '../../components/AddAccountModal';
 
 export default function PlansPage() {
   // Check authentication with NextAuth
@@ -61,41 +62,25 @@ export default function PlansPage() {
     refetchDraft,
   } = usePlans();
 
-  const { accounts, loading: accountsLoading } = useAccounts();
+  const { accounts, loading: accountsLoading, refetchAccounts } = useAccounts();
 
   const [expandedAccounts, setExpandedAccounts] = useState<Record<string, boolean>>({});
   const [isCommitting, setIsCommitting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [isAddingAccount, setIsAddingAccount] = useState(false);
-  const [showAddAccountDialog, setShowAddAccountDialog] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Refetch accounts and plans when the component mounts
+  useEffect(() => {
+    if (session) {
+      refetchAccounts();
+      refetchDraft();
+    }
+  }, [session, refetchAccounts, refetchDraft]);
 
   // Filter out accounts that are already in the draft plan
   const availableAccounts = accounts?.filter(
     account => !draftPlan?.accounts.some(planAccount => planAccount.account.id === account.id)
   ) || [];
-
-  const handleAddAccount = async () => {
-    if (!draftPlan || !selectedAccountId) return;
-    
-    setActionError(null);
-    setIsAddingAccount(true);
-    
-    try {
-      await addAccountToPlan(draftPlan.id, selectedAccountId, []);
-      setShowAddAccountDialog(false);
-      setSelectedAccountId('');
-    } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Failed to add account: ${err.message}`);
-      } else {
-        setActionError('An unexpected error occurred');
-      }
-    } finally {
-      setIsAddingAccount(false);
-    }
-  };
 
   const handleUpdatePlanNotes = async (notes: string) => {
     if (!draftPlan) return;
@@ -318,70 +303,27 @@ export default function PlansPage() {
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold">Accounts</h2>
-          <Dialog open={showAddAccountDialog} onOpenChange={setShowAddAccountDialog}>
-            <DialogTrigger asChild>
-              <Button variant="outline" disabled={availableAccounts.length === 0}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Account
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Account to Plan</DialogTitle>
-                <DialogDescription>
-                  Select an account to add to your money plan.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-4">
-                <Label htmlFor="account-select" className="mb-2 block">
-                  Select Account
-                </Label>
-                <Select
-                  value={selectedAccountId}
-                  onValueChange={setSelectedAccountId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableAccounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <DialogFooter>
-                <Button 
-                  onClick={handleAddAccount} 
-                  disabled={!selectedAccountId || isAddingAccount}
-                >
-                  {isAddingAccount ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    'Add Account'
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <AddAccountModal 
+            planId={draftPlan.id} 
+            availableAccounts={availableAccounts}
+            onSuccess={() => {
+              refetchDraft();
+              refetchAccounts();
+            }}
+          />
         </div>
         
         {draftPlan.accounts.length === 0 ? (
           <Card className="p-6 text-center">
             <p className="text-muted-foreground mb-4">No accounts added to this plan yet.</p>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowAddAccountDialog(true)}
-              disabled={availableAccounts.length === 0}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Your First Account
-            </Button>
+            <AddAccountModal 
+              planId={draftPlan.id} 
+              availableAccounts={availableAccounts}
+              onSuccess={() => {
+                refetchDraft();
+                refetchAccounts();
+              }}
+            />
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

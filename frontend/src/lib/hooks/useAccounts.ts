@@ -7,9 +7,6 @@ import { GET_ACCOUNTS, CREATE_ACCOUNT, UPDATE_ACCOUNT } from '../graphql/operati
 export interface Account {
   id: string;
   name: string;
-  balance?: number;
-  accountType?: string;
-  currency?: string;
 }
 
 export interface CreateAccountInput {

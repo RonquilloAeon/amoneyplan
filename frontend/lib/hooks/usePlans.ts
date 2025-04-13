@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
+import { useSession } from 'next-auth/react';
 import {
   GET_PLANS,
   GET_DRAFT_PLAN,
@@ -65,6 +66,7 @@ export interface BucketConfigInput {
 
 export function usePlans() {
   const [error, setError] = useState<string | null>(null);
+  const { data: session } = useSession();
   
   // Query for all plans
   const { 
@@ -75,7 +77,8 @@ export function usePlans() {
     variables: { filter: { isArchived: false } },
     onError: (error) => {
       setError(`Failed to load plans: ${error.message}`);
-    }
+    },
+    skip: !session, // Skip if not authenticated
   });
   
   // Query for draft plan
@@ -86,7 +89,8 @@ export function usePlans() {
   } = useQuery(GET_DRAFT_PLAN, {
     onError: (error) => {
       setError(`Failed to load draft plan: ${error.message}`);
-    }
+    },
+    skip: !session, // Skip if not authenticated
   });
 
   // Extract plans and draft plan from data

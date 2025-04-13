@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- Make a plan is the index page - show a draft plan if there is one - query draftMoneyPlan to see if there's a money plan. If not, show an empty state.
+- View plans (/plans) shows the overview of all plans (draft if there is one and show all by querying moneyPlans) - be sure to paginate

@@ -1,85 +1,108 @@
-import { useState } from 'react';
-import { useMutation, useQuery } from '@apollo/client';
-import {
-  GET_ACCOUNTS,
-  CREATE_ACCOUNT,
-  UPDATE_ACCOUNT,
-  DELETE_ACCOUNT,
-} from '@/lib/graphql/operations';
-import { Account, CreateAccountInput, UpdateAccountInput } from '@/lib/graphql/types';
+'use client';
 
-export const useAccounts = () => {
+import { useState, useCallback } from 'react';
+import { useMutation, useQuery } from '@apollo/client';
+import { GET_ACCOUNTS, CREATE_ACCOUNT, UPDATE_ACCOUNT } from '../graphql/operations';
+
+export interface Account {
+  id: string;
+  name: string;
+  balance?: number;
+  accountType?: string;
+  currency?: string;
+}
+
+export interface CreateAccountInput {
+  name: string;
+  notes?: string;
+}
+
+export interface UpdateAccountInput {
+  accountId: string;
+  name: string;
+  notes?: string;
+}
+
+export function useAccounts() {
   const [error, setError] = useState<string | null>(null);
 
-  const { data, loading, refetch } = useQuery(GET_ACCOUNTS);
-
-  const [createAccount] = useMutation(CREATE_ACCOUNT, {
-    onCompleted: () => {
-      refetch();
-    },
+  // Query for accounts
+  const { 
+    data: accountsData, 
+    loading, 
+    refetch: refetchAccountsQuery
+  } = useQuery(GET_ACCOUNTS, {
     onError: (error) => {
-      setError(error.message);
-    },
+      setError(`Failed to load accounts: ${error.message}`);
+    }
   });
 
-  const [updateAccount] = useMutation(UPDATE_ACCOUNT, {
-    onCompleted: () => {
-      refetch();
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  // Extract accounts from data
+  const accounts = accountsData?.accounts || [];
 
-  const [deleteAccount] = useMutation(DELETE_ACCOUNT, {
-    onCompleted: () => {
-      refetch();
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  // Mutations
+  const [createAccountMutation] = useMutation(CREATE_ACCOUNT);
+  const [updateAccountMutation] = useMutation(UPDATE_ACCOUNT);
 
-  const handleCreateAccount = async (input: CreateAccountInput) => {
+  // Helper functions to wrap mutations
+  const createAccount = async (input: CreateAccountInput) => {
     try {
-      await createAccount({
-        variables: { input },
+      const { data } = await createAccountMutation({
+        variables: { input }
       });
-      setError(null);
+      
+      if (data?.account?.create.__typename === 'ApplicationError') {
+        throw new Error(data.account.create.message);
+      }
+      
+      await refetchAccountsQuery();
+      
+      return data?.account?.create.data;
     } catch (error) {
-      // Error is handled by onError callback
+      if (error instanceof Error) {
+        setError(`Failed to create account: ${error.message}`);
+      }
+      throw error;
     }
   };
 
-  const handleUpdateAccount = async (id: string, input: UpdateAccountInput) => {
+  const updateAccount = async (input: UpdateAccountInput) => {
     try {
-      await updateAccount({
-        variables: { id, input },
+      const { data } = await updateAccountMutation({
+        variables: { input }
       });
-      setError(null);
+      
+      if (data?.account?.update.__typename === 'ApplicationError') {
+        throw new Error(data.account.update.message);
+      }
+      
+      await refetchAccountsQuery();
+      
+      return data?.account?.update.data;
     } catch (error) {
-      // Error is handled by onError callback
+      if (error instanceof Error) {
+        setError(`Failed to update account: ${error.message}`);
+      }
+      throw error;
     }
   };
 
-  const handleDeleteAccount = async (id: string) => {
+  const refetchAccounts = useCallback(async () => {
     try {
-      await deleteAccount({
-        variables: { id },
-      });
-      setError(null);
+      await refetchAccountsQuery();
     } catch (error) {
-      // Error is handled by onError callback
+      if (error instanceof Error) {
+        setError(`Failed to refetch accounts: ${error.message}`);
+      }
     }
-  };
+  }, [refetchAccountsQuery]);
 
   return {
-    accounts: data?.accounts || [],
+    accounts,
     loading,
     error,
-    createAccount: handleCreateAccount,
-    updateAccount: handleUpdateAccount,
-    deleteAccount: handleDeleteAccount,
-    refetch,
+    createAccount,
+    updateAccount,
+    refetchAccounts
   };
-}; 
+} 

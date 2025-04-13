@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
 import { useSession } from 'next-auth/react';
 import { GET_ACCOUNTS, CREATE_ACCOUNT, UPDATE_ACCOUNT } from '../graphql/operations';
+import { useToast } from '@/lib/hooks/useToast';
 
 export interface Account {
   id: string;
@@ -24,6 +25,7 @@ export interface UpdateAccountInput {
 export function useAccounts() {
   const [error, setError] = useState<string | null>(null);
   const { data: session } = useSession();
+  const { toast } = useToast();
 
   // Query for accounts
   const { 
@@ -32,7 +34,13 @@ export function useAccounts() {
     refetch: refetchAccountsQuery
   } = useQuery(GET_ACCOUNTS, {
     onError: (error) => {
-      setError(`Failed to load accounts: ${error.message}`);
+      const errorMessage = `Failed to load accounts: ${error.message}`;
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage
+      });
     },
     skip: !session // Skip if not authenticated
   });
@@ -60,7 +68,13 @@ export function useAccounts() {
       return data?.account?.create.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to create account: ${error.message}`);
+        const errorMessage = `Failed to create account: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -78,10 +92,21 @@ export function useAccounts() {
       
       await refetchAccountsQuery();
       
+      toast({
+        title: "Success",
+        description: "Account updated successfully"
+      });
+      
       return data?.account?.update.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to update account: ${error.message}`);
+        const errorMessage = `Failed to update account: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -92,10 +117,16 @@ export function useAccounts() {
       await refetchAccountsQuery();
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to refetch accounts: ${error.message}`);
+        const errorMessage = `Failed to refetch accounts: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
     }
-  }, [refetchAccountsQuery]);
+  }, [refetchAccountsQuery, toast]);
 
   return {
     accounts,

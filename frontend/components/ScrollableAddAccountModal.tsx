@@ -8,7 +8,6 @@ import { X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAccounts } from '@/lib/hooks/useAccounts';
 import { usePlans } from '@/lib/hooks/usePlans';
@@ -16,6 +15,7 @@ import { BucketConfigInput, Plan } from '@/lib/hooks/usePlans';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/lib/hooks/useToast';
 
 interface BucketFormState {
   name: string;
@@ -37,7 +37,7 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     { name: 'Default', category: '', allocatedAmount: '' }
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>(availableAccounts.length > 0 ? 'existing' : 'new');
   const [newAccountName, setNewAccountName] = useState<string>('');
 
@@ -85,13 +85,21 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     if (activeTab === 'existing') {
       // Check if account is selected
       if (!selectedAccountId) {
-        setError('Please select an account');
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: "Please select an account"
+        });
         return false;
       }
     } else {
       // Check if new account name is provided
       if (!newAccountName.trim()) {
-        setError('Please enter a name for the new account');
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: "Please enter a name for the new account"
+        });
         return false;
       }
       
@@ -101,7 +109,11 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
       );
       
       if (nameExists) {
-        setError(`An account named "${newAccountName.trim()}" already exists`);
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: `An account named "${newAccountName.trim()}" already exists`
+        });
         return false;
       }
     }
@@ -109,17 +121,29 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     // Check if all buckets have names and categories
     for (let i = 0; i < buckets.length; i++) {
       if (!buckets[i].name.trim()) {
-        setError(`Bucket #${i + 1} needs a name`);
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: `Bucket #${i + 1} needs a name`
+        });
         return false;
       }
       
       if (!buckets[i].category) {
-        setError(`Bucket #${i + 1} needs a category`);
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: `Bucket #${i + 1} needs a category`
+        });
         return false;
       }
       
       if (!buckets[i].allocatedAmount) {
-        setError(`Bucket #${i + 1} needs an amount`);
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: `Bucket #${i + 1} needs an amount`
+        });
         return false;
       }
     }
@@ -131,7 +155,11 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     );
     
     if (hasDuplicates) {
-      setError('Bucket names must be unique');
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Bucket names must be unique"
+      });
       return false;
     }
 
@@ -141,7 +169,6 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    setError(null);
     setIsSubmitting(true);
     
     try {
@@ -178,14 +205,29 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
       
       // Refresh data and notify parent of success
       await refetchAccounts();
+      
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Account successfully added to plan"
+      });
+      
       if (onSuccess) {
         onSuccess();
       }
     } catch (err) {
       if (err instanceof Error) {
-        setError(err.message);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: err.message
+        });
       } else {
-        setError('An error occurred while adding the account');
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "An error occurred while adding the account"
+        });
       }
     } finally {
       setIsSubmitting(false);
@@ -197,7 +239,6 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     setNewAccountName('');
     setNotes('');
     setBuckets([{ name: 'Default', category: '', allocatedAmount: '' }]);
-    setError(null);
     setActiveTab(availableAccounts.length > 0 ? 'existing' : 'new');
   };
 
@@ -226,8 +267,8 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
         <DialogPrimitive.Content 
           className={cn(
             "fixed z-50 top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]",
-            "w-[calc(100%-32px)] sm:w-full sm:max-w-lg max-h-[85vh] rounded-md bg-white border p-0",
-            "shadow-lg focus:outline-none flex flex-col",
+            "w-[calc(100%-32px)] sm:w-full sm:max-w-xl lg:max-w-2xl max-h-[85vh] rounded-md bg-white border p-0",
+            "shadow-lg focus:outline-none flex flex-col overflow-hidden",
             "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
           )}
         >
@@ -242,7 +283,7 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
           </div>
           
           {/* Content - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2 max-h-[calc(85vh-140px)]">
             {/* Remaining Balance Display */}
             {currentPlan && (
               <div className="bg-blue-50 border border-blue-100 p-4 rounded-md mb-4 text-center">
@@ -252,12 +293,6 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
             )}
             
             <div className="space-y-6">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              
               {/* Account Selection Tabs */}
               <div className="space-y-6">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -375,7 +410,7 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
                           className="focus:ring-primary focus:border-primary"
                         />
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-5">
                         <Label htmlFor={`bucket-category-${index}`} className="mb-1 block flex items-center">
                           Category <span className="text-red-500 ml-1">*</span>
                         </Label>
@@ -445,7 +480,7 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
           </div>
           
           {/* Footer - Fixed at bottom */}
-          <div className="border-t p-4 sm:p-6 bg-white sticky bottom-0 z-10 flex justify-end">
+          <div className="border-t p-4 sm:p-6 bg-white sticky bottom-0 z-10 flex justify-end mt-auto">
             <Button 
               type="submit" 
               onClick={handleSubmit} 

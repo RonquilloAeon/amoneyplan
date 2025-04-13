@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { usePlans } from '@/lib/hooks/usePlans';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/lib/hooks/useToast';
 
 export function StartPlanModal() {
   const { data: session } = useSession();
@@ -18,46 +18,42 @@ export function StartPlanModal() {
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState<Date>(new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const { createPlan, refetchDraft } = usePlans();
 
   const handleSubmit = async () => {
     if (!initialBalance || parseFloat(initialBalance) <= 0) {
-      setError('Please enter a valid initial balance greater than zero.');
-      return;
-    }
-
-    // Make sure user is authenticated
-    if (!session) {
-      setError('You must be logged in to start a plan');
-      return;
-    }
-
-    setError(null);
-    setIsSubmitting(true);
-    
-    try {
-      await createPlan({
-        initialBalance: parseFloat(initialBalance),
-        notes: notes,
-        planDate: date.toISOString().split('T')[0],
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please enter a valid initial balance greater than zero"
       });
-      
-      // Reset form and close modal
-      setInitialBalance('');
-      setNotes('');
-      setDate(new Date());
-      setOpen(false);
-      
-      // Refresh draft plan data
-      await refetchDraft();
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An error occurred while creating the plan');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await createPlan({
+        initialBalance: parseFloat(initialBalance),
+        notes: notes.trim() || undefined,
+        planDate: date.toISOString().split('T')[0]
+      });
+
+      if (result) {
+        toast({
+          title: "Success",
+          description: "Plan created successfully"
+        });
+        setOpen(false);
+        setInitialBalance('');
+        setNotes('');
+        setDate(new Date());
       }
+    } catch (err) {
+      // Error is handled in the usePlans hook with toast
+      console.error('Failed to create plan:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -76,11 +72,6 @@ export function StartPlanModal() {
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="initial-balance" className="text-right">
               Initial Balance
@@ -119,7 +110,7 @@ export function StartPlanModal() {
             <Textarea
               id="notes"
               className="col-span-3"
-              placeholder="Optional notes for this plan"
+              placeholder="Optional notes about this plan"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={isSubmitting}
@@ -127,11 +118,7 @@ export function StartPlanModal() {
           </div>
         </div>
         <DialogFooter>
-          <Button 
-            type="submit" 
-            onClick={handleSubmit} 
-            disabled={isSubmitting}
-          >
+          <Button type="submit" onClick={handleSubmit} disabled={isSubmitting}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -16,6 +16,7 @@ import {
   UPDATE_PLAN_ACCOUNT_NOTES,
   UPDATE_PLAN_NOTES,
 } from '../graphql/operations';
+import { useToast } from '@/lib/hooks/useToast';
 
 // Types based on the GraphQL schema
 export interface Bucket {
@@ -67,6 +68,7 @@ export interface BucketConfigInput {
 export function usePlans() {
   const [error, setError] = useState<string | null>(null);
   const { data: session } = useSession();
+  const { toast } = useToast();
   
   // Query for all plans
   const { 
@@ -76,7 +78,13 @@ export function usePlans() {
   } = useQuery(GET_PLANS, {
     variables: { filter: { isArchived: false } },
     onError: (error) => {
-      setError(`Failed to load plans: ${error.message}`);
+      const errorMessage = `Failed to load plans: ${error.message}`;
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage
+      });
     },
     skip: !session // Skip if not authenticated
   });
@@ -88,7 +96,13 @@ export function usePlans() {
     refetch: refetchDraftQuery 
   } = useQuery(GET_DRAFT_PLAN, {
     onError: (error) => {
-      setError(`Failed to load draft plan: ${error.message}`);
+      const errorMessage = `Failed to load draft plan: ${error.message}`;
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMessage
+      });
     },
     skip: !session // Skip if not authenticated
   });
@@ -125,7 +139,13 @@ export function usePlans() {
       return data?.moneyPlan?.startPlan.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to create plan: ${error.message}`);
+        const errorMessage = `Failed to create plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -152,7 +172,13 @@ export function usePlans() {
       return data?.moneyPlan?.adjustPlanBalance.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to update plan: ${error.message}`);
+        const errorMessage = `Failed to update plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -165,16 +191,37 @@ export function usePlans() {
       });
       
       if (data?.moneyPlan?.commitPlan.__typename === 'ApplicationError') {
-        throw new Error(data.moneyPlan.commitPlan.message);
+        // Show error toast but don't throw to prevent UI disruption
+        const errorMessage = data.moneyPlan.commitPlan.message;
+        setError(errorMessage);
+        toast({
+          variant: "destructive", 
+          title: "Cannot Commit Plan",
+          description: errorMessage
+        });
+        return null;
       }
       
       await refetchDraftQuery();
       await refetchPlansQuery();
       
+      toast({
+        title: "Success",
+        description: "Plan successfully committed"
+      });
+      
       return data?.moneyPlan?.commitPlan.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to commit plan: ${error.message}`);
+        const errorMessage = `Failed to commit plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
+        // Return null instead of throwing to prevent UI disruption
+        return null;
       }
       throw error;
     }
@@ -192,10 +239,21 @@ export function usePlans() {
       
       await refetchPlansQuery();
       
+      toast({
+        title: "Success",
+        description: "Plan successfully archived"
+      });
+      
       return data?.moneyPlan?.archivePlan.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to archive plan: ${error.message}`);
+        const errorMessage = `Failed to archive plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -216,7 +274,13 @@ export function usePlans() {
       return data?.moneyPlan?.addAccount.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to add account to plan: ${error.message}`);
+        const errorMessage = `Failed to add account to plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -237,7 +301,13 @@ export function usePlans() {
       return data?.moneyPlan?.changeAccountConfiguration.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to update plan account: ${error.message}`);
+        const errorMessage = `Failed to update plan account: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -255,10 +325,21 @@ export function usePlans() {
       
       await refetchDraftQuery();
       
+      toast({
+        title: "Success",
+        description: "Account successfully removed from plan"
+      });
+      
       return data?.moneyPlan?.removeAccount.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to remove account from plan: ${error.message}`);
+        const errorMessage = `Failed to remove account from plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -276,10 +357,21 @@ export function usePlans() {
       
       await refetchDraftQuery();
       
+      toast({
+        title: "Success",
+        description: "Account notes updated successfully"
+      });
+      
       return data?.moneyPlan?.editAccountNotes.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to update plan account notes: ${error.message}`);
+        const errorMessage = `Failed to update plan account notes: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -297,10 +389,21 @@ export function usePlans() {
       
       await refetchDraftQuery();
       
+      toast({
+        title: "Success",
+        description: "Plan notes updated successfully"
+      });
+      
       return data?.moneyPlan?.editPlanNotes.data;
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to update plan notes: ${error.message}`);
+        const errorMessage = `Failed to update plan notes: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -320,7 +423,13 @@ export function usePlans() {
       await refetchDraftQuery();
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to toggle account check: ${error.message}`);
+        const errorMessage = `Failed to toggle account check: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
       throw error;
     }
@@ -331,20 +440,32 @@ export function usePlans() {
       await refetchPlansQuery();
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to refetch plans: ${error.message}`);
+        const errorMessage = `Failed to refetch plans: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
     }
-  }, [refetchPlansQuery]);
+  }, [refetchPlansQuery, toast]);
   
   const refetchDraft = useCallback(async () => {
     try {
       await refetchDraftQuery();
     } catch (error) {
       if (error instanceof Error) {
-        setError(`Failed to refetch draft plan: ${error.message}`);
+        const errorMessage = `Failed to refetch draft plan: ${error.message}`;
+        setError(errorMessage);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMessage
+        });
       }
     }
-  }, [refetchDraftQuery]);
+  }, [refetchDraftQuery, toast]);
 
   return {
     plans,

@@ -31,9 +31,9 @@ import {
   SelectTrigger, 
   SelectValue
 } from '@/components/ui/select';
-import { AddAccountModal } from '../../components/AddAccountModal';
 import { ScrollableAddAccountModal } from '../../components/ScrollableAddAccountModal';
 import { PlanAccountCard } from '../../components/PlanAccountCard';
+import { useToast } from '@/lib/hooks/useToast';
 
 // We'll style a div element as our badge since there seems to be an issue with the badge component import
 // This is a temporary solution until the badge component is fixed
@@ -42,6 +42,7 @@ export default function PlansPage() {
   // Check authentication with NextAuth
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -74,8 +75,18 @@ export default function PlansPage() {
   const [expandedAccounts, setExpandedAccounts] = useState<Record<string, boolean>>({});
   const [isCommitting, setIsCommitting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Display error in toast if it exists
+  useEffect(() => {
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error
+      });
+    }
+  }, [error, toast]);
 
   // Refetch accounts and plans when the component mounts
   useEffect(() => {
@@ -128,20 +139,13 @@ export default function PlansPage() {
 
   const handleCommitPlan = async () => {
     if (!draftPlan) return;
-    
-    setActionError(null);
     setIsCommitting(true);
-    
     try {
       await commitPlan(draftPlan.id);
-      await refetchPlans();
-      await refetchDraft();
+      // No need to set action error as the toast will be shown from the hook
     } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Failed to commit plan: ${err.message}`);
-      } else {
-        setActionError('An unexpected error occurred');
-      }
+      // The error is already handled in the hook with a toast
+      console.error('Failed to commit plan:', err);
     } finally {
       setIsCommitting(false);
     }
@@ -149,20 +153,13 @@ export default function PlansPage() {
 
   const handleArchivePlan = async () => {
     if (!draftPlan) return;
-    
-    setActionError(null);
     setIsArchiving(true);
-    
     try {
       await archivePlan(draftPlan.id);
-      await refetchPlans();
-      await refetchDraft();
+      // No need to set action error as the toast will be shown from the hook
     } catch (err) {
-      if (err instanceof Error) {
-        setActionError(`Failed to archive plan: ${err.message}`);
-      } else {
-        setActionError('An unexpected error occurred');
-      }
+      // The error is already handled in the hook with a toast
+      console.error('Failed to archive plan:', err);
     } finally {
       setIsArchiving(false);
     }
@@ -203,16 +200,6 @@ export default function PlansPage() {
     );
   }
 
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
-
   if (!draftPlan) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -239,14 +226,6 @@ export default function PlansPage() {
 
   return (
     <div className="space-y-8">
-      {actionError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      )}
-      
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Current Plan</h1>
         <div className="space-x-2">
@@ -403,8 +382,10 @@ export default function PlansPage() {
               <PlanAccountCard
                 key={planAccount.id}
                 planAccount={planAccount}
+                initialBalance={Number(draftPlan.initialBalance)}
                 onRemove={handleRemoveAccount}
                 onUpdateNotes={handleUpdatePlanAccountNotes}
+                viewMode={viewMode}
               />
             ))}
           </div>

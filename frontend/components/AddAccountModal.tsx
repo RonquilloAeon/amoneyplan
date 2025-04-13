@@ -13,6 +13,7 @@ import { useAccounts } from '@/lib/hooks/useAccounts';
 import { usePlans } from '@/lib/hooks/usePlans';
 import { BucketConfigInput, Plan } from '@/lib/hooks/usePlans';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatCurrency } from '@/lib/utils/format';
 
 interface BucketFormState {
   name: string;
@@ -31,14 +32,14 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [buckets, setBuckets] = useState<BucketFormState[]>([
-    { name: 'Default', category: 'general', allocatedAmount: '0' }
+    { name: 'Default', category: '', allocatedAmount: '' }
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>(availableAccounts.length > 0 ? 'existing' : 'new');
   const [newAccountName, setNewAccountName] = useState<string>('');
 
-  const { addAccountToPlan } = usePlans();
+  const { addAccountToPlan, draftPlan } = usePlans();
   const { createAccount, accounts, loading: accountsLoading, refetchAccounts } = useAccounts();
 
   // Update the active tab when availableAccounts changes
@@ -64,7 +65,7 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
   }, [open, refetchAccounts, accounts]);
 
   const handleAddBucket = () => {
-    setBuckets([...buckets, { name: '', category: 'general', allocatedAmount: '0' }]);
+    setBuckets([...buckets, { name: '', category: '', allocatedAmount: '' }]);
   };
 
   const handleRemoveBucket = (index: number) => {
@@ -104,10 +105,20 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
       }
     }
 
-    // Check if all buckets have names
+    // Check if all buckets have names and categories
     for (let i = 0; i < buckets.length; i++) {
       if (!buckets[i].name.trim()) {
         setError(`Bucket #${i + 1} needs a name`);
+        return false;
+      }
+      
+      if (!buckets[i].category) {
+        setError(`Bucket #${i + 1} needs a category`);
+        return false;
+      }
+      
+      if (!buckets[i].allocatedAmount) {
+        setError(`Bucket #${i + 1} needs an amount`);
         return false;
       }
     }
@@ -161,7 +172,7 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
       setSelectedAccountId('');
       setNewAccountName('');
       setNotes('');
-      setBuckets([{ name: 'Default', category: 'general', allocatedAmount: '0' }]);
+      setBuckets([{ name: 'Default', category: '', allocatedAmount: '' }]);
       setOpen(false);
       
       // Refresh data and notify parent of success
@@ -184,10 +195,13 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
     setSelectedAccountId('');
     setNewAccountName('');
     setNotes('');
-    setBuckets([{ name: 'Default', category: 'general', allocatedAmount: '0' }]);
+    setBuckets([{ name: 'Default', category: '', allocatedAmount: '' }]);
     setError(null);
     setActiveTab(availableAccounts.length > 0 ? 'existing' : 'new');
   };
+
+  // Find the current plan and get remaining balance
+  const currentPlan = draftPlan?.id === planId ? draftPlan : null;
 
   return (
     <Dialog open={open} onOpenChange={(newOpen) => {
@@ -203,13 +217,25 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
       <DialogTrigger asChild>
         <Button>Add Account</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] bg-white dark:bg-gray-950">
+      <DialogContent 
+        className="sm:max-w-[600px] bg-white dark:bg-gray-950"
+        style={{ backgroundColor: 'white' }}
+      >
         <DialogHeader>
           <DialogTitle>Add Account to Plan</DialogTitle>
           <DialogDescription>
             Select an existing account or create a new one to add to your money plan.
           </DialogDescription>
         </DialogHeader>
+        
+        {/* Remaining Balance Display */}
+        {currentPlan && (
+          <div className="bg-muted p-3 rounded-md mb-4 text-center">
+            <p className="text-sm font-medium">Remaining Plan Balance</p>
+            <p className="text-2xl font-bold">{formatCurrency(currentPlan.remainingBalance)}</p>
+          </div>
+        )}
+        
         <div className="grid gap-4 py-4">
           {error && (
             <Alert variant="destructive">
@@ -220,16 +246,18 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
           {/* Account Selection Tabs */}
           <div className="space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid grid-cols-2 w-full">
+              <TabsList className="grid grid-cols-2 w-full bg-white dark:bg-gray-800">
                 <TabsTrigger 
                   value="existing" 
                   disabled={availableAccounts.length === 0 || isSubmitting}
+                  className="data-[state=active]:bg-muted"
                 >
                   Use Existing Account
                 </TabsTrigger>
                 <TabsTrigger 
                   value="new"
                   disabled={isSubmitting}
+                  className="data-[state=active]:bg-muted"
                 >
                   Create New Account
                 </TabsTrigger>
@@ -252,10 +280,17 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
                     onValueChange={setSelectedAccountId}
                     disabled={isSubmitting || availableAccounts.length === 0}
                   >
-                    <SelectTrigger id="account-select" className="col-span-3 w-full">
+                    <SelectTrigger 
+                      id="account-select" 
+                      className="col-span-3 w-full bg-white dark:bg-gray-800"
+                      style={{ backgroundColor: 'white' }}
+                    >
                       <SelectValue placeholder="Select an account" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent 
+                      className="bg-white dark:bg-gray-800"
+                      style={{ backgroundColor: 'white' }}
+                    >
                       {availableAccounts.length > 0 ? (
                         availableAccounts.map((account) => (
                           <SelectItem key={account.id} value={account.id}>
@@ -311,29 +346,39 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
               {buckets.map((bucket, index) => (
                 <div key={index} className="grid grid-cols-12 gap-2 items-center border p-3 rounded-md">
                   <div className="col-span-4">
-                    <Label htmlFor={`bucket-name-${index}`} className="mb-1 block">
-                      Name
+                    <Label htmlFor={`bucket-name-${index}`} className="mb-1 block flex items-center">
+                      Name <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Input
                       id={`bucket-name-${index}`}
                       value={bucket.name}
                       onChange={(e) => handleBucketChange(index, 'name', e.target.value)}
                       disabled={isSubmitting}
+                      required
+                      placeholder="Enter bucket name"
                     />
                   </div>
                   <div className="col-span-3">
-                    <Label htmlFor={`bucket-category-${index}`} className="mb-1 block">
-                      Category
+                    <Label htmlFor={`bucket-category-${index}`} className="mb-1 block flex items-center">
+                      Category <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Select
                       value={bucket.category}
                       onValueChange={(value) => handleBucketChange(index, 'category', value)}
                       disabled={isSubmitting}
+                      required
                     >
-                      <SelectTrigger id={`bucket-category-${index}`}>
-                        <SelectValue />
+                      <SelectTrigger 
+                        id={`bucket-category-${index}`} 
+                        className="bg-white dark:bg-gray-800"
+                        style={{ backgroundColor: 'white' }}
+                      >
+                        <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent 
+                        className="bg-white dark:bg-gray-800"
+                        style={{ backgroundColor: 'white' }}
+                      >
                         <SelectItem value="need">Need</SelectItem>
                         <SelectItem value="want">Want</SelectItem>
                         <SelectItem value="savings">Savings/Investing</SelectItem>
@@ -342,15 +387,17 @@ export function AddAccountModal({ planId, availableAccounts, onSuccess }: AddAcc
                     </Select>
                   </div>
                   <div className="col-span-3">
-                    <Label htmlFor={`bucket-amount-${index}`} className="mb-1 block">
-                      Amount
+                    <Label htmlFor={`bucket-amount-${index}`} className="mb-1 block flex items-center">
+                      Amount <span className="text-red-500 ml-1">*</span>
                     </Label>
                     <Input
                       id={`bucket-amount-${index}`}
                       type="number"
+                      placeholder="Enter amount"
                       value={bucket.allocatedAmount}
                       onChange={(e) => handleBucketChange(index, 'allocatedAmount', e.target.value)}
                       disabled={isSubmitting}
+                      required
                     />
                   </div>
                   <div className="col-span-2 flex items-end justify-end">

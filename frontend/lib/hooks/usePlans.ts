@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
 import { useSession } from 'next-auth/react';
 import {
@@ -78,7 +78,7 @@ export function usePlans() {
     onError: (error) => {
       setError(`Failed to load plans: ${error.message}`);
     },
-    skip: !session, // Skip if not authenticated
+    skip: !session // Skip if not authenticated
   });
   
   // Query for draft plan
@@ -90,7 +90,7 @@ export function usePlans() {
     onError: (error) => {
       setError(`Failed to load draft plan: ${error.message}`);
     },
-    skip: !session, // Skip if not authenticated
+    skip: !session // Skip if not authenticated
   });
 
   // Extract plans and draft plan from data

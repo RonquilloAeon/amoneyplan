@@ -252,20 +252,4 @@ export const UPDATE_PLAN_NOTES = gql`
       }
     }
   }
-`;
-
-export const TOGGLE_ACCOUNT_CHECK = gql`
-  mutation ToggleAccountCheck($planId: GlobalID!, $accountId: GlobalID!, $isChecked: Boolean!) {
-    moneyPlan {
-      setAccountCheckedState(input: { planId: $planId, accountId: $accountId, isChecked: $isChecked }) {
-        ... on Success {
-          data
-          message
-        }
-        ... on ApplicationError {
-          message
-        }
-      }
-    }
-  }
 `; 

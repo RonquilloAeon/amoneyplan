@@ -19,7 +19,9 @@ import {
   Check, 
   Plus,
   Loader2,
-  Trash2
+  Trash2,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { StartPlanModal } from '../../components/StartPlanModal';
 import { 
@@ -30,6 +32,11 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { AddAccountModal } from '../../components/AddAccountModal';
+import { ScrollableAddAccountModal } from '../../components/ScrollableAddAccountModal';
+import { PlanAccountCard } from '../../components/PlanAccountCard';
+
+// We'll style a div element as our badge since there seems to be an issue with the badge component import
+// This is a temporary solution until the badge component is fixed
 
 export default function PlansPage() {
   // Check authentication with NextAuth
@@ -68,6 +75,7 @@ export default function PlansPage() {
   const [isCommitting, setIsCommitting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Refetch accounts and plans when the component mounts
   useEffect(() => {
@@ -217,6 +225,18 @@ export default function PlansPage() {
     );
   }
 
+  const allocatedAmount = calculateTotalBalance(draftPlan);
+  const allocatedPercentage = (Number(allocatedAmount) / Number(draftPlan.initialBalance)) * 100;
+  const remainingAmount = Number(draftPlan.initialBalance) - Number(allocatedAmount);
+
+  // Determine progress color based on percentage
+  const getProgressColor = () => {
+    if (allocatedPercentage < 80) return 'bg-blue-500';
+    if (allocatedPercentage < 100) return 'bg-amber-500';
+    if (allocatedPercentage === 100) return 'bg-emerald-500';
+    return 'bg-red-500';
+  };
+
   return (
     <div className="space-y-8">
       {actionError && (
@@ -234,6 +254,7 @@ export default function PlansPage() {
             variant="outline" 
             onClick={handleArchivePlan} 
             disabled={isArchiving || isCommitting}
+            className="border-amber-600 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
           >
             {isArchiving ? (
               <>
@@ -250,6 +271,7 @@ export default function PlansPage() {
           <Button 
             onClick={handleCommitPlan} 
             disabled={isCommitting || isArchiving}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {isCommitting ? (
               <>
@@ -266,33 +288,51 @@ export default function PlansPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-primary/20 shadow-md">
+        <CardHeader className="bg-primary/5">
           <CardTitle>Plan Overview</CardTitle>
           <CardDescription>
             Created on {formatDate(draftPlan.createdAt)}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+              <h3 className="text-sm font-medium text-gray-500 mb-1">Initial Balance</h3>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(Number(draftPlan.initialBalance))}</p>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+              <h3 className="text-sm font-medium text-gray-500 mb-1">Allocated</h3>
+              <p className="text-2xl font-bold text-emerald-600">{formatCurrency(Number(allocatedAmount))}</p>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+              <h3 className="text-sm font-medium text-gray-500 mb-1">Remaining</h3>
+              <p className="text-2xl font-bold text-blue-600">{formatCurrency(remainingAmount)}</p>
+            </div>
+          </div>
+
           <div>
             <div className="flex justify-between mb-2">
-              <span>Balance Allocation</span>
-              <span>
-                {formatCurrency(Number(calculateTotalBalance(draftPlan)))} / {formatCurrency(Number(draftPlan.initialBalance))}
+              <span className="font-medium">Allocation Progress</span>
+              <span className="font-medium">
+                {allocatedPercentage.toFixed(0)}%
               </span>
             </div>
             <Progress 
-              value={(Number(calculateTotalBalance(draftPlan)) / Number(draftPlan.initialBalance)) * 100} 
-              className="h-2"
+              value={allocatedPercentage} 
+              className="h-3"
+              indicatorClassName={getProgressColor()}
             />
           </div>
           
-          <div className="space-y-2">
+          <div className="space-y-2 mt-6">
             <h3 className="font-semibold">Notes</h3>
             <Textarea 
               value={draftPlan.notes || ''} 
               placeholder="Add notes to your plan"
-              className="text-foreground"
+              className="text-foreground border-gray-300 focus:border-primary focus:ring-primary"
               onChange={(e) => handleUpdatePlanNotes(e.target.value)}
             />
           </div>
@@ -302,21 +342,50 @@ export default function PlansPage() {
       {/* Accounts Section */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Accounts</h2>
-          <AddAccountModal 
-            planId={draftPlan.id} 
-            availableAccounts={availableAccounts}
-            onSuccess={() => {
-              refetchDraft();
-              refetchAccounts();
-            }}
-          />
+          <div className="flex items-center">
+            <h2 className="text-2xl font-bold mr-3">Accounts</h2>
+            {draftPlan.accounts.length > 0 && (
+              <div className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-primary text-white">
+                {draftPlan.accounts.length}
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <div className="flex border rounded-md overflow-hidden">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'outline'}
+                size="sm"
+                className="rounded-none border-0"
+                onClick={() => setViewMode('grid')}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                size="sm"
+                className="rounded-none border-0"
+                onClick={() => setViewMode('list')}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <ScrollableAddAccountModal 
+              planId={draftPlan.id} 
+              availableAccounts={availableAccounts}
+              onSuccess={() => {
+                refetchDraft();
+                refetchAccounts();
+              }}
+            />
+          </div>
         </div>
         
         {draftPlan.accounts.length === 0 ? (
-          <Card className="p-6 text-center">
+          <Card className="p-6 text-center border-dashed border-2">
             <p className="text-muted-foreground mb-4">No accounts added to this plan yet.</p>
-            <AddAccountModal 
+            <ScrollableAddAccountModal 
               planId={draftPlan.id} 
               availableAccounts={availableAccounts}
               onSuccess={() => {
@@ -326,50 +395,17 @@ export default function PlansPage() {
             />
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className={viewMode === 'grid' 
+            ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" 
+            : "space-y-4"
+          }>
             {draftPlan.accounts.map((planAccount) => (
-              <Card key={planAccount.id} className="relative">
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle>{planAccount.account.name}</CardTitle>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleRemoveAccount(planAccount.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Remove account</span>
-                    </Button>
-                  </div>
-                  <CardDescription>
-                    Total allocated: {formatCurrency(Number(planAccount.buckets.reduce((sum, bucket) => sum + bucket.allocatedAmount, 0)))}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pb-2">
-                  <div className="space-y-2">
-                    {planAccount.buckets.length > 0 ? (
-                      planAccount.buckets.map((bucket) => (
-                        <div key={bucket.id} className="flex justify-between">
-                          <span>{bucket.name}</span>
-                          <span>{formatCurrency(bucket.allocatedAmount)}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No buckets configured</p>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Textarea 
-                    value={planAccount.notes || ''} 
-                    placeholder="Add notes"
-                    className="text-foreground text-sm"
-                    rows={2}
-                    onChange={(e) => handleUpdatePlanAccountNotes(planAccount.id, e.target.value)}
-                  />
-                </CardFooter>
-              </Card>
+              <PlanAccountCard
+                key={planAccount.id}
+                planAccount={planAccount}
+                onRemove={handleRemoveAccount}
+                onUpdateNotes={handleUpdatePlanAccountNotes}
+              />
             ))}
           </div>
         )}

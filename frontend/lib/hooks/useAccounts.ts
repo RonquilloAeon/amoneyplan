@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
+import { useSession } from 'next-auth/react';
 import { GET_ACCOUNTS, CREATE_ACCOUNT, UPDATE_ACCOUNT } from '../graphql/operations';
 
 export interface Account {
@@ -22,6 +23,7 @@ export interface UpdateAccountInput {
 
 export function useAccounts() {
   const [error, setError] = useState<string | null>(null);
+  const { data: session } = useSession();
 
   // Query for accounts
   const { 
@@ -31,7 +33,8 @@ export function useAccounts() {
   } = useQuery(GET_ACCOUNTS, {
     onError: (error) => {
       setError(`Failed to load accounts: ${error.message}`);
-    }
+    },
+    skip: !session // Skip if not authenticated
   });
 
   // Extract accounts from data

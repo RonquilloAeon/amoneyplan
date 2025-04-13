@@ -1,58 +1,16 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useMutation, useQuery, gql } from '@apollo/client';
-
-// GraphQL operations
-const LOGIN_MUTATION = gql`
-  mutation Login($username: String!, $password: String!) {
-    auth {
-      login(username: $username, password: $password) {
-        success
-        token
-        error
-      }
-    }
-  }
-`;
-
-const REGISTER_MUTATION = gql`
-  mutation Register($username: String!, $email: String!, $password: String!, $firstName: String, $lastName: String) {
-    auth {
-      register(
-        username: $username
-        email: $email
-        password: $password
-        firstName: $firstName
-        lastName: $lastName
-      ) {
-        success
-        token
-        error
-      }
-    }
-  }
-`;
-
-const ME_QUERY = gql`
-  query Me {
-    me {
-      id
-      username
-      email
-      firstName
-      lastName
-    }
-  }
-`;
+import { useSession, signIn, signOut } from 'next-auth/react';
+// import { useMutation, useQuery, gql } from '@apollo/client';
 
 // Define user type
 interface User {
   id: string;
   username: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 // Auth context type
@@ -83,82 +41,42 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const { data: session, status } = useSession();
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  // Login mutation
-  const [loginMutation] = useMutation(LOGIN_MUTATION);
   
-  // Register mutation
-  const [registerMutation] = useMutation(REGISTER_MUTATION);
-
-  // Me query
-  const { data: userData, loading: userLoading, refetch: refetchUser } = useQuery(ME_QUERY, {
-    skip: !hasToken(), // Skip the query if no token exists
-    onCompleted: (data) => {
-      if (data?.me) {
-        setUser(data.me);
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      setIsLoading(false);
-    },
-    onError: () => {
-      setUser(null);
-      setIsAuthenticated(false);
-      setIsLoading(false);
-      // If the query fails, likely the token is invalid, so remove it
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('authToken');
-      }
-    }
-  });
-
-  // Check if token exists
-  function hasToken(): boolean {
-    if (typeof window === 'undefined') return false;
-    return !!localStorage.getItem('authToken');
-  }
-
-  // Check auth on initial load
+  // Set auth state based on NextAuth session
   useEffect(() => {
-    const checkAuth = async () => {
-      if (hasToken()) {
-        await refetchUser();
-      } else {
-        setIsLoading(false);
-      }
-    };
+    if (session && session.user) {
+      setUser({
+        id: session.user.id as string,
+        username: session.user.name || '',
+        email: session.user.email || '',
+        firstName: session.user.firstName as string | undefined,
+        lastName: session.user.lastName as string | undefined
+      });
+    } else {
+      setUser(null);
+    }
+  }, [session]);
 
-    checkAuth();
-  }, [refetchUser]);
+  const isAuthenticated = !!session;
+  const isLoading = status === 'loading';
 
-  // Login function
+  // Login function using NextAuth
   const login = async (username: string, password: string) => {
     try {
-      const { data } = await loginMutation({
-        variables: { username, password },
+      const result = await signIn('credentials', {
+        username,
+        password,
+        redirect: false
       });
 
-      if (data?.auth?.login?.success) {
-        const token = data.auth.login.token;
-        
-        // Save token to localStorage
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('authToken', token);
-        }
-        
-        // Refetch user data
-        await refetchUser();
-        
+      if (!result?.error) {
         return { success: true };
       } else {
         return { 
           success: false, 
-          error: data?.auth?.login?.error || 'Login failed' 
+          error: result.error || 'Login failed' 
         };
       }
     } catch (error) {
@@ -173,28 +91,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Register function
   const register = async (data: RegisterData) => {
     try {
-      const response = await registerMutation({
-        variables: data,
+      // Use your API to register the user
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
       });
 
-      const registerData = response.data?.auth?.register;
+      const responseData = await response.json();
 
-      if (registerData?.success) {
-        const token = registerData.token;
-        
-        // Save token to localStorage
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('authToken', token);
-        }
-        
-        // Refetch user data
-        await refetchUser();
-        
+      if (response.ok) {
+        // After registration, log them in
+        await login(data.username, data.password);
         return { success: true };
       } else {
         return { 
           success: false, 
-          error: registerData?.error || 'Registration failed' 
+          error: responseData.error || 'Registration failed' 
         };
       }
     } catch (error) {
@@ -208,11 +123,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Logout function
   const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('authToken');
-    }
-    setUser(null);
-    setIsAuthenticated(false);
+    signOut({ callbackUrl: '/auth/login' });
   };
 
   const value = {

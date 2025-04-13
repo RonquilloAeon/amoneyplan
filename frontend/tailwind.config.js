@@ -5,6 +5,17 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './frontend/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './frontend/app/**/*.{js,ts,jsx,tsx,mdx}'
+  ],
+  safelist: [
+    'bg-green-100', 'text-green-800', 'border-green-200', 
+    'dark:bg-green-800', 'dark:text-green-100', 'dark:border-green-700',
+    'bg-amber-100', 'text-amber-800', 'border-amber-200',
+    'dark:bg-amber-800', 'dark:text-amber-100', 'dark:border-amber-700',
+    'bg-green-200', 'bg-amber-300'
   ],
   theme: {
     container: {

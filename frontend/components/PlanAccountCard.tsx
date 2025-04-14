@@ -16,6 +16,7 @@ import { Trash2, ChevronDown, ChevronUp, CreditCard, Edit } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
 import { EditBucketsModal } from './EditBucketsModal';
 import { usePlans } from '@/lib/hooks/usePlans';
+import { getCategoryStyles } from '@/lib/constants/bucketCategories';
 
 export interface Bucket {
   id: string;
@@ -79,16 +80,6 @@ export function PlanAccountCard({
     if (percentage <= 95) return 'bg-amber-500';
     if (percentage <= 100) return 'bg-green-500';
     return 'bg-red-500';
-  };
-
-  const getCategoryColor = (category: string) => {
-    // Simplify to just return the base color name that can be used in Tailwind classes
-    const lowerCategory = category.toLowerCase();
-    if (lowerCategory === 'need' || lowerCategory === 'savings' || lowerCategory === 'savings/investing') {
-      return 'green';
-    } else {
-      return 'amber';
-    }
   };
 
   return (
@@ -216,9 +207,12 @@ export function PlanAccountCard({
                 }`}>
                   <div className="flex items-center flex-1">
                     <div className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold mr-2 ${
-                      getCategoryColor(bucket.category) === 'green' 
-                        ? 'bg-green-200 text-green-800 border-green-200 dark:bg-green-800 dark:text-green-100 dark:border-green-700'
-                        : 'bg-amber-300 text-amber-800 border-amber-200 dark:bg-amber-800 dark:text-amber-100 dark:border-amber-700'
+                      getCategoryStyles(bucket.category).bgColor} ${
+                      getCategoryStyles(bucket.category).textColor} ${
+                      getCategoryStyles(bucket.category).borderColor} ${
+                      getCategoryStyles(bucket.category).darkBgColor} ${
+                      getCategoryStyles(bucket.category).darkTextColor} ${
+                      getCategoryStyles(bucket.category).darkBorderColor
                     }`}>
                       {bucket.category.charAt(0).toUpperCase() + bucket.category.slice(1)}
                     </div>

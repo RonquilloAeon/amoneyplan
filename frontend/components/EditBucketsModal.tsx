@@ -13,6 +13,7 @@ import { BucketConfigInput, PlanAccount } from '@/lib/hooks/usePlans';
 import { formatCurrency } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/lib/hooks/useToast';
+import { BUCKET_CATEGORIES } from '@/lib/constants/bucketCategories';
 
 interface BucketFormState {
   name: string;
@@ -266,11 +267,15 @@ export function EditBucketsModal({ planId, planAccount, onSuccess }: EditBuckets
                               <SelectValue placeholder="Select a category" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="need">Need</SelectItem>
-                              <SelectItem value="want">Want</SelectItem>
-                              <SelectItem value="savings">Savings</SelectItem>
-                              <SelectItem value="debt">Debt</SelectItem>
-                              <SelectItem value="default">Default</SelectItem>
+                              {BUCKET_CATEGORIES.map((category) => (
+                                <SelectItem 
+                                  key={category.value} 
+                                  value={category.value}
+                                  className={`text-${category.color}`}
+                                >
+                                  {category.label}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>

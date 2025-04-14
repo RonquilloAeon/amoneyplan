@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/lib/hooks/useToast';
+import { BUCKET_CATEGORIES } from '@/lib/constants/bucketCategories';
 
 interface BucketFormState {
   name: string;
@@ -427,10 +428,11 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
                             <SelectValue placeholder="Select a category" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="need" className="text-blue-700">Need</SelectItem>
-                            <SelectItem value="want" className="text-purple-700">Want</SelectItem>
-                            <SelectItem value="savings/investing" className="text-green-700">Savings/Investing</SelectItem>
-                            <SelectItem value="other" className="text-gray-700">Other</SelectItem>
+                            {BUCKET_CATEGORIES.map((category) => (
+                              <SelectItem key={category.value} value={category.value} className={`text-${category.color}`}>
+                                {category.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>

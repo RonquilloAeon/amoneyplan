@@ -253,4 +253,35 @@ export const UPDATE_PLAN_NOTES = gql`
       }
     }
   }
+`;
+
+export const GET_PLAN = gql`
+  query GetPlan($id: GlobalID!) {
+    moneyPlan(id: $id) {
+      id
+      initialBalance
+      remainingBalance
+      notes
+      isCommitted
+      isArchived
+      createdAt
+      planDate
+      archivedAt
+      accounts {
+        id
+        isChecked
+        notes
+        account {
+          id
+          name
+        }
+        buckets {
+          id
+          name
+          category
+          allocatedAmount
+        }
+      }
+    }
+  }
 `; 

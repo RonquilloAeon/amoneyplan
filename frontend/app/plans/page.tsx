@@ -386,6 +386,7 @@ export default function PlansPage() {
                 onRemove={handleRemoveAccount}
                 onUpdateNotes={handleUpdatePlanAccountNotes}
                 viewMode={viewMode}
+                planId={draftPlan.id}
               />
             ))}
           </div>

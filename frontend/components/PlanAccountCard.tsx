@@ -12,8 +12,10 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Trash2, ChevronDown, ChevronUp, CreditCard } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, CreditCard, Edit } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
+import { EditBucketsModal } from './EditBucketsModal';
+import { usePlans } from '@/lib/hooks/usePlans';
 
 export interface Bucket {
   id: string;
@@ -40,9 +42,11 @@ interface PlanAccountCardProps {
   initialBalance?: number; // Plan's initial balance
   onRemove?: (id: string) => void;
   onUpdateNotes?: (id: string, notes: string) => void;
+  onEdit?: (planAccount: PlanAccount) => void;
   editable?: boolean;
   highlighted?: boolean;
   viewMode?: 'grid' | 'list';
+  planId: string; // Add planId to props
 }
 
 export function PlanAccountCard({ 
@@ -50,11 +54,14 @@ export function PlanAccountCard({
   initialBalance = 0,
   onRemove, 
   onUpdateNotes,
+  onEdit,
   editable = true,
   highlighted = false,
-  viewMode = 'grid'
+  viewMode = 'grid',
+  planId
 }: PlanAccountCardProps) {
   const [expanded, setExpanded] = useState(viewMode === 'list');
+  const { refetchDraft } = usePlans();
   
   const totalAllocated = planAccount.buckets.reduce(
     (sum, bucket) => sum + bucket.allocatedAmount, 
@@ -129,6 +136,16 @@ export function PlanAccountCard({
                 {expanded ? 'Collapse' : 'Expand'}
               </span>
             </Button>
+            
+            {editable && (
+              <EditBucketsModal 
+                planId={planId}
+                planAccount={planAccount}
+                onSuccess={() => {
+                  refetchDraft();
+                }}
+              />
+            )}
             
             {editable && onRemove && (
               <Button 

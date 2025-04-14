@@ -10,6 +10,17 @@ export const GET_ACCOUNTS = gql`
   }
 `;
 
+export const GET_ACCOUNTS_PAGINATED = gql`
+  query GetAccountsPaginated {
+    account {
+      list {
+        id
+        name
+      }
+    }
+  }
+`;
+
 export const CREATE_ACCOUNT = gql`
   mutation CreateAccount($input: CreateAccountInput!) {
     account {

@@ -3,10 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useAccountsPaginated } from '@/lib/hooks/useAccounts';
+import { useAccountsPaginated } from '@/lib/hooks/useAccountsPaginated';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusIcon } from 'lucide-react';
+import { PaginationControls } from '@/components/PaginationControls';
 
 export default function AccountsPage() {
   const { data: session, status } = useSession();
@@ -19,7 +20,8 @@ export default function AccountsPage() {
     currentPage, 
     totalPages, 
     goToNextPage, 
-    goToPreviousPage 
+    goToPreviousPage,
+    goToPage
   } = useAccountsPaginated(10);
 
   // Redirect to login if not authenticated
@@ -63,36 +65,27 @@ export default function AccountsPage() {
         <>
           <div className="grid gap-4 md:grid-cols-2">
             {accounts.map((account) => (
-              <Card key={account.id} className="cursor-pointer hover:shadow-md transition-shadow" 
-                onClick={() => router.push(`/accounts/${account.id}`)}>
+              <Card key={account.id}>
                 <CardHeader className="py-4">
                   <CardTitle>{account.name}</CardTitle>
                 </CardHeader>
+                {account.notes && (
+                  <CardContent className="pt-0">
+                    <p className="text-muted-foreground text-sm">{account.notes}</p>
+                  </CardContent>
+                )}
               </Card>
             ))}
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center pt-4">
-              <Button 
-                variant="outline" 
-                onClick={goToPreviousPage} 
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span>
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button 
-                variant="outline" 
-                onClick={goToNextPage} 
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          )}
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            goToNextPage={goToNextPage}
+            goToPreviousPage={goToPreviousPage}
+            goToPage={goToPage}
+            className="mt-4"
+          />
         </>
       )}
     </div>

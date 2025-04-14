@@ -59,6 +59,7 @@ class Account(relay.Node):
 
     id: relay.NodeID[str]
     name: str
+    notes: str
 
     @staticmethod
     def from_domain(domain_account) -> "Account":
@@ -68,6 +69,7 @@ class Account(relay.Node):
         return Account(
             id=domain_account.id,
             name=domain_account.name,
+            notes=domain_account.notes,
         )
 
     @staticmethod
@@ -78,6 +80,7 @@ class Account(relay.Node):
         return Account(
             id=str(orm_account.id),
             name=orm_account.name,
+            notes=orm_account.notes,
         )
 
 
@@ -106,6 +109,7 @@ class PlanAccount(relay.Node):
             account=Account(
                 id=domain_account.account_id,
                 name=domain_account.name,
+                notes=domain_account.notes,
             ),
             buckets=[Bucket.from_domain(bucket) for bucket in domain_account.buckets.values()],
             is_checked=domain_account.is_checked,
@@ -177,6 +181,7 @@ class MoneyPlan(relay.Node):
                     account=Account(
                         id=allocation.account.account_id,
                         name=allocation.name,
+                        notes=allocation.account.notes,
                     ),
                     buckets=[Bucket.from_domain(bucket) for bucket in allocation.account.buckets.values()],
                     is_checked=allocation.account.is_checked,
@@ -409,6 +414,7 @@ class Query(AuthQueries):
                 account = Account(
                     id=str(orm_account.id),
                     name=orm_account.name,
+                    notes=orm_account.notes,
                 )
                 accounts.append(account)
             return accounts
@@ -446,8 +452,6 @@ class Query(AuthQueries):
         if id:
             plan_id = id.node_id
             plan_result = use_case.get_plan(plan_id)
-
-            print("S>>", plan_result, plan_result.success, plan_result.has_data)
 
             if plan_result.success and plan_result.has_data():
                 return MoneyPlan.from_domain(plan_result.data)
@@ -572,10 +576,6 @@ class Query(AuthQueries):
                     end_cursor=None,
                 ),
             )
-
-    @strawberry.field
-    def account(self, info: Info) -> AccountQueries:
-        return AccountQueries()
 
 
 # GraphQL mutations

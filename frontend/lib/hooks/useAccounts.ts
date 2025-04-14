@@ -3,12 +3,13 @@
 import { useState, useCallback } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
 import { useSession } from 'next-auth/react';
-import { GET_ACCOUNTS, CREATE_ACCOUNT, UPDATE_ACCOUNT, GET_ACCOUNTS_PAGINATED } from '../graphql/operations';
+import { GET_ACCOUNTS, CREATE_ACCOUNT, UPDATE_ACCOUNT } from '../graphql/operations';
 import { useToast } from '@/lib/hooks/useToast';
 
 export interface Account {
   id: string;
   name: string;
+  notes?: string;
 }
 
 export interface CreateAccountInput {
@@ -134,83 +135,6 @@ export function useAccounts() {
     error,
     createAccount,
     updateAccount,
-    refetchAccounts
-  };
-}
-
-export function useAccountsPaginated(pageSize = 10) {
-  const [error, setError] = useState<string | null>(null);
-  const { data: session } = useSession();
-  const { toast } = useToast();
-  const [currentPage, setCurrentPage] = useState(1);
-
-  // Query for paginated accounts
-  const {
-    data: accountsData,
-    loading,
-    refetch: refetchAccountsQuery
-  } = useQuery(GET_ACCOUNTS_PAGINATED, {
-    onError: (error) => {
-      const errorMessage = `Failed to load accounts: ${error.message}`;
-      setError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage
-      });
-    },
-    skip: !session // Skip if not authenticated
-  });
-
-  // Extract accounts from data
-  const accounts = accountsData?.account?.list || [];
-  
-  // Client-side pagination
-  const totalAccounts = accounts.length;
-  const totalPages = Math.ceil(totalAccounts / pageSize);
-  
-  // Get current page data
-  const indexOfLastAccount = currentPage * pageSize;
-  const indexOfFirstAccount = indexOfLastAccount - pageSize;
-  const currentAccounts = accounts.slice(indexOfFirstAccount, indexOfLastAccount);
-
-  const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  const goToPreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const refetchAccounts = useCallback(async () => {
-    try {
-      await refetchAccountsQuery();
-    } catch (error) {
-      if (error instanceof Error) {
-        const errorMessage = `Failed to refetch accounts: ${error.message}`;
-        setError(errorMessage);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: errorMessage
-        });
-      }
-    }
-  }, [refetchAccountsQuery, toast]);
-
-  return {
-    accounts: currentAccounts,
-    allAccounts: accounts,
-    loading,
-    error,
-    currentPage,
-    totalPages,
-    goToNextPage,
-    goToPreviousPage,
     refetchAccounts
   };
 } 

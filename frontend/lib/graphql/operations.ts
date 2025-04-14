@@ -6,17 +6,7 @@ export const GET_ACCOUNTS = gql`
     accounts {
       id
       name
-    }
-  }
-`;
-
-export const GET_ACCOUNTS_PAGINATED = gql`
-  query GetAccountsPaginated {
-    account {
-      list {
-        id
-        name
-      }
+      notes
     }
   }
 `;

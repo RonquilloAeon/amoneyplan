@@ -17,6 +17,7 @@ import { formatCurrency } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/lib/hooks/useToast';
 import { BUCKET_CATEGORIES } from '@/lib/constants/bucketCategories';
+import { PlanRemainingBalance } from '@/components/PlanRemainingBalance';
 
 interface BucketFormState {
   name: string;
@@ -41,6 +42,7 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>(availableAccounts.length > 0 ? 'existing' : 'new');
   const [newAccountName, setNewAccountName] = useState<string>('');
+  const [pendingAllocation, setPendingAllocation] = useState<number>(0);
 
   const { addAccountToPlan, draftPlan } = usePlans();
   const { createAccount, accounts, loading: accountsLoading, refetchAccounts } = useAccounts();
@@ -66,6 +68,14 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     }
   }, [open, refetchAccounts, accounts]);
 
+  // Calculate the total pending allocation whenever buckets change
+  useEffect(() => {
+    const total = buckets.reduce((sum, bucket) => {
+      return sum + (parseFloat(bucket.allocatedAmount) || 0);
+    }, 0);
+    setPendingAllocation(total);
+  }, [buckets]);
+
   const handleAddBucket = () => {
     setBuckets([...buckets, { name: '', category: '', allocatedAmount: '' }]);
   };
@@ -80,6 +90,14 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     const newBuckets = [...buckets];
     newBuckets[index] = { ...newBuckets[index], [field]: value };
     setBuckets(newBuckets);
+    
+    // Immediately recalculate pending allocation when an amount changes
+    if (field === 'allocatedAmount') {
+      const total = newBuckets.reduce((sum, bucket) => {
+        return sum + (parseFloat(bucket.allocatedAmount) || 0);
+      }, 0);
+      setPendingAllocation(total);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -240,6 +258,7 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
     setNewAccountName('');
     setNotes('');
     setBuckets([{ name: 'Default', category: '', allocatedAmount: '' }]);
+    setPendingAllocation(0); // Reset pending allocation on form reset
     setActiveTab(availableAccounts.length > 0 ? 'existing' : 'new');
   };
 
@@ -285,13 +304,12 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
           
           {/* Content - Scrollable */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2 max-h-[calc(85vh-140px)]">
-            {/* Remaining Balance Display */}
-            {currentPlan && (
-              <div className="bg-blue-50 border border-blue-100 p-4 rounded-md mb-4 text-center">
-                <p className="text-sm font-medium text-blue-700">Remaining Plan Balance</p>
-                <p className="text-2xl font-bold text-blue-800">{formatCurrency(currentPlan.remainingBalance)}</p>
-              </div>
-            )}
+            {/* Replace the Remaining Balance Display with the new component */}
+            <PlanRemainingBalance 
+              plan={currentPlan} 
+              pendingAllocation={pendingAllocation}
+              className="mb-4"
+            />
             
             <div className="space-y-6">
               {/* Account Selection Tabs */}

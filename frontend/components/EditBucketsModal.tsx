@@ -14,6 +14,7 @@ import { formatCurrency } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/lib/hooks/useToast';
 import { BUCKET_CATEGORIES } from '@/lib/constants/bucketCategories';
+import { PlanRemainingBalance } from '@/components/PlanRemainingBalance';
 
 interface BucketFormState {
   name: string;
@@ -34,6 +35,8 @@ export function EditBucketsModal({ planId, planAccount, onSuccess }: EditBuckets
   const { toast } = useToast();
   const { updatePlanAccount, draftPlan } = usePlans();
   const [accountToEdit, setAccountToEdit] = useState<PlanAccount>(planAccount);
+  const [pendingAllocation, setPendingAllocation] = useState<number>(0);
+  const [originalAllocation, setOriginalAllocation] = useState<number>(0);
 
   // Update local account data when prop changes
   useEffect(() => {
@@ -49,11 +52,27 @@ export function EditBucketsModal({ planId, planAccount, onSuccess }: EditBuckets
         allocatedAmount: bucket.allocatedAmount.toString()
       }));
       
+      // Calculate the original total allocation
+      const initialTotal = accountToEdit.buckets.reduce((sum, bucket) => {
+        return sum + (bucket.allocatedAmount || 0);
+      }, 0);
+      setOriginalAllocation(initialTotal);
+      
       setBuckets(initialBuckets.length > 0 ? initialBuckets : [
         { name: 'Default', category: '', allocatedAmount: '' }
       ]);
     }
   }, [open, accountToEdit]);
+
+  // Calculate pending allocation changes
+  useEffect(() => {
+    const currentTotal = buckets.reduce((sum, bucket) => {
+      return sum + (parseFloat(bucket.allocatedAmount) || 0);
+    }, 0);
+    
+    // The pending allocation is the difference between current and original
+    setPendingAllocation(currentTotal - originalAllocation);
+  }, [buckets, originalAllocation]);
 
   const handleAddBucket = () => {
     setBuckets([...buckets, { name: '', category: '', allocatedAmount: '' }]);
@@ -69,6 +88,16 @@ export function EditBucketsModal({ planId, planAccount, onSuccess }: EditBuckets
     const newBuckets = [...buckets];
     newBuckets[index] = { ...newBuckets[index], [field]: value };
     setBuckets(newBuckets);
+    
+    // Immediately recalculate pending allocation when an amount changes
+    if (field === 'allocatedAmount') {
+      const currentTotal = newBuckets.reduce((sum, bucket) => {
+        return sum + (parseFloat(bucket.allocatedAmount) || 0);
+      }, 0);
+      
+      // The pending allocation is the difference between current and original
+      setPendingAllocation(currentTotal - originalAllocation);
+    }
   };
 
   const validateForm = (): boolean => {
@@ -175,6 +204,8 @@ export function EditBucketsModal({ planId, planAccount, onSuccess }: EditBuckets
       if (!newOpen) {
         // Reset buckets when closing the modal without saving
         setBuckets([]);
+        setPendingAllocation(0);
+        setOriginalAllocation(0);
         if (onSuccess) {
           onSuccess(); // Notify parent that the modal was closed
         }
@@ -206,6 +237,13 @@ export function EditBucketsModal({ planId, planAccount, onSuccess }: EditBuckets
             </div>
             
             <div className="mt-4 overflow-y-auto flex-grow pr-2">
+              {/* Add the PlanRemainingBalance component at the top */}
+              <PlanRemainingBalance 
+                plan={currentPlan} 
+                pendingAllocation={pendingAllocation}
+                className="mb-6"
+              />
+                
               {/* Buckets */}
               <div className="space-y-4 mb-8">
                 <div className="flex items-center justify-between">

@@ -47,18 +47,18 @@ export const BUCKET_CATEGORIES: BucketCategory[] = [
   {
     value: "other",
     label: "Other",
-    color: "yellow-700",
-    bgColor: "bg-yellow-200",
-    textColor: "text-yellow-800",
-    borderColor: "border-yellow-200", 
-    darkBgColor: "dark:bg-yellow-800",
-    darkTextColor: "dark:text-yellow-100",
-    darkBorderColor: "dark:border-yellow-700"
+    color: "gray-700",
+    bgColor: "bg-gray-200",
+    textColor: "text-gray-800",
+    borderColor: "border-gray-200", 
+    darkBgColor: "dark:bg-gray-800",
+    darkTextColor: "dark:text-gray-100",
+    darkBorderColor: "dark:border-gray-700"
   },
 ];
 
 export const getCategoryByValue = (value: string): BucketCategory => {
-  return BUCKET_CATEGORIES.find(cat => cat.value === value) || BUCKET_CATEGORIES[4]; // Default to the last category (Default)
+  return BUCKET_CATEGORIES.find(cat => cat.value === value) || BUCKET_CATEGORIES[3]; // Default to "other" category
 };
 
 export const getCategoryStyles = (category: string) => {
@@ -71,4 +71,4 @@ export const getCategoryStyles = (category: string) => {
     darkTextColor: categoryData.darkTextColor,
     darkBorderColor: categoryData.darkBorderColor
   };
-}; 
+};

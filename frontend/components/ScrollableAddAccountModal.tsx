@@ -429,7 +429,11 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
                           </SelectTrigger>
                           <SelectContent>
                             {BUCKET_CATEGORIES.map((category) => (
-                              <SelectItem key={category.value} value={category.value} className={`text-${category.color}`}>
+                              <SelectItem 
+                                key={category.value} 
+                                value={category.value} 
+                                className={`text-${category.color}`}
+                              >
                                 {category.label}
                               </SelectItem>
                             ))}

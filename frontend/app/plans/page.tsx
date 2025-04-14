@@ -10,9 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   AlertCircle, 
   Archive, 
@@ -24,16 +21,10 @@ import {
   List
 } from 'lucide-react';
 import { StartPlanModal } from '../../components/StartPlanModal';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue
-} from '@/components/ui/select';
 import { ScrollableAddAccountModal } from '../../components/ScrollableAddAccountModal';
 import { PlanAccountCard } from '../../components/PlanAccountCard';
 import { useToast } from '@/lib/hooks/useToast';
+import { PlanAllocationProgress } from '@/components/PlanAllocationProgress';
 
 // We'll style a div element as our badge since there seems to be an issue with the badge component import
 // This is a temporary solution until the badge component is fixed
@@ -293,16 +284,11 @@ export default function PlansPage() {
           </div>
 
           <div>
-            <div className="flex justify-between mb-2">
-              <span className="font-medium">Allocation Progress</span>
-              <span className="font-medium">
-                {allocatedPercentage.toFixed(0)}%
-              </span>
-            </div>
-            <Progress 
-              value={allocatedPercentage} 
-              className="h-3"
-              indicatorClassName={getProgressColor()}
+            <PlanAllocationProgress 
+              buckets={draftPlan.accounts.flatMap(account => account.buckets)}
+              initialBalance={Number(draftPlan.initialBalance)}
+              height="h-3"
+              showAmounts={true}
             />
           </div>
           

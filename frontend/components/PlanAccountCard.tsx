@@ -17,6 +17,7 @@ import { formatCurrency } from '@/lib/utils/format';
 import { EditBucketsModal } from './EditBucketsModal';
 import { usePlans } from '@/lib/hooks/usePlans';
 import { getCategoryStyles } from '@/lib/constants/bucketCategories';
+import { PlanAllocationProgress } from './PlanAllocationProgress';
 
 export interface Bucket {
   id: string;
@@ -164,14 +165,14 @@ export function PlanAccountCard({
             {initialBalance > 0 && (
               <div className="mt-2 space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span>Allocation</span>
                   <span className="font-medium">{totalPercentage.toFixed(1)}%</span>
                 </div>
-                <Progress 
-                  value={totalPercentage} 
-                  max={100} 
-                  className="h-2"
-                  indicatorClassName={getProgressColor(totalPercentage)}
+                <PlanAllocationProgress 
+                  buckets={planAccount.buckets}
+                  initialBalance={initialBalance}
+                  height="h-2"
+                  showLabels={false}
+                  showPercentages={false}
                 />
               </div>
             )}
@@ -182,11 +183,12 @@ export function PlanAccountCard({
       <CardContent className="pb-2 space-y-3">
         {initialBalance > 0 && viewMode === 'list' && (
           <div className="w-full space-y-1 mb-3">
-            <Progress 
-              value={totalPercentage} 
-              max={100} 
-              className="h-2"
-              indicatorClassName={getProgressColor(totalPercentage)}
+            <PlanAllocationProgress 
+              buckets={planAccount.buckets}
+              initialBalance={initialBalance}
+              height="h-2"
+              showLabels={false}
+              showPercentages={false}
             />
           </div>
         )}
@@ -252,20 +254,22 @@ export function PlanAccountCard({
         )}
       </CardContent>
       
-      {(editable || planAccount.notes) && (
-        <CardFooter className="pt-2">
-          {editable && onUpdateNotes ? (
-            <Textarea 
-              value={planAccount.notes || ''} 
-              placeholder="Add notes for this account..."
-              className="text-foreground text-sm min-h-[60px] resize-none focus:border-primary"
-              onChange={(e) => onUpdateNotes(planAccount.id, e.target.value)}
-            />
-          ) : planAccount.notes ? (
-            <div className="text-sm rounded-md bg-accent/30 p-3 w-full">
-              <p className="text-foreground">{planAccount.notes}</p>
+      {onUpdateNotes && (
+        <CardFooter className="p-3 border-t">
+          <div className="w-full space-y-2">
+            <div className="flex justify-between">
+              <label htmlFor="notes" className="text-xs font-medium text-muted-foreground">
+                Notes
+              </label>
             </div>
-          ) : null}
+            <Textarea
+              id="notes"
+              placeholder="Add notes for this account..."
+              value={planAccount.notes || ''}
+              onChange={(e) => onUpdateNotes(planAccount.id, e.target.value)}
+              className="h-20 text-sm resize-none"
+            />
+          </div>
         </CardFooter>
       )}
     </Card>

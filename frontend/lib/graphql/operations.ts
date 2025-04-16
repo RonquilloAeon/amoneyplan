@@ -75,6 +75,12 @@ export const GET_PLANS = gql`
           }
         }
       }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
     }
   }
 `;
@@ -280,6 +286,22 @@ export const GET_PLAN = gql`
           name
           category
           allocatedAmount
+        }
+      }
+    }
+  }
+`;
+
+export const SET_ACCOUNT_CHECKED_STATE = gql`
+  mutation SetAccountCheckedState($planId: GlobalID!, $accountId: GlobalID!, $isChecked: Boolean!) {
+    moneyPlan {
+      setAccountCheckedState(input: { planId: $planId, accountId: $accountId, isChecked: $isChecked }) {
+        ... on Success {
+          data
+          message
+        }
+        ... on ApplicationError {
+          message
         }
       }
     }

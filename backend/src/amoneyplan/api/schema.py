@@ -103,9 +103,10 @@ class PlanAccount(relay.Node):
         return None
 
     @staticmethod
-    def from_domain(domain_account) -> "PlanAccount":
+    def from_domain(domain_account, plan_id: str) -> "PlanAccount":
         account = PlanAccount(
-            id=domain_account.account_id,
+            # Explicitly encode the composite string as the node ID
+            id=relay.to_base64("PlanAccount", f"{plan_id}:{domain_account.account_id}"),
             account=Account(
                 id=domain_account.account_id,
                 name=domain_account.name,
@@ -118,7 +119,7 @@ class PlanAccount(relay.Node):
         return account
 
     @staticmethod
-    def from_orm(orm_plan_account: OrmPlanAccount) -> "PlanAccount":
+    def from_orm(orm_plan_account: OrmPlanAccount, plan_id: str) -> "PlanAccount":
         """
         Create a PlanAccount instance from an ORM PlanAccount object.
         This method is useful for converting ORM objects to GraphQL types.
@@ -135,7 +136,7 @@ class PlanAccount(relay.Node):
 
         orm_account = orm_plan_account.account
         account = PlanAccount(
-            id=str(orm_account.id),
+            id=relay.to_base64("PlanAccount", f"{plan_id}:{orm_account.id}"),
             account=Account.from_domain(orm_account),
             buckets=buckets,
             is_checked=orm_plan_account.is_checked,
@@ -177,7 +178,7 @@ class MoneyPlan(relay.Node):
             remaining_balance=domain_plan.remaining_balance.as_float,
             accounts=[
                 PlanAccount(
-                    id=allocation.account.account_id,
+                    id=relay.to_base64("PlanAccount", f"{domain_plan.id}:{allocation.account.account_id}"),
                     account=Account(
                         id=allocation.account.account_id,
                         name=allocation.name,
@@ -205,11 +206,13 @@ class MoneyPlan(relay.Node):
         This method is useful for converting ORM objects to GraphQL types.
         """
         # Get accounts for the plan
-        accounts = [PlanAccount.from_orm(plan_account) for plan_account in orm_plan.plan_accounts.all()]
+        accounts = [
+            PlanAccount.from_orm(plan_account, orm_plan.id) for plan_account in orm_plan.plan_accounts.all()
+        ]
 
         # Create the MoneyPlan GraphQL type
         plan = MoneyPlan(
-            id=str(orm_plan.id),
+            id=orm_plan.id,
             initial_balance=float(orm_plan.initial_balance),
             remaining_balance=float(orm_plan.remaining_balance),
             accounts=accounts,
@@ -289,7 +292,6 @@ class AllocateFundsInput:
 class PlanBalanceAdjustInput:
     plan_id: relay.GlobalID
     adjustment: float
-    reason: str = ""
 
 
 @strawberry.input
@@ -673,19 +675,12 @@ class MoneyPlanMutations:
         plan_id = input.plan_id.node_id
 
         try:
-            result = use_case.adjust_plan_balance(
-                plan_id=plan_id, adjustment=input.adjustment, reason=input.reason
-            )
+            result = use_case.adjust_plan_balance(plan_id=plan_id, adjustment=input.adjustment)
 
             if not result.success:
                 return graphql_common.ApplicationError(message=result.message)
 
-            plan_result = use_case.get_plan(plan_id)
-            if not plan_result.success:
-                return graphql_common.ApplicationError(message=plan_result.message)
-
-            return graphql_common.Success.from_node(
-                MoneyPlan.from_domain(plan_result.data),
+            return graphql_common.EmptySuccess(
                 is_message_displayable=True,
                 message="Plan balance adjusted successfully.",
             )
@@ -772,7 +767,7 @@ class MoneyPlanMutations:
                 plan_account = OrmPlanAccount.objects.get(plan_id=plan_id, account_id=account_id)
 
                 return graphql_common.Success.from_node(
-                    PlanAccount.from_orm(plan_account),
+                    PlanAccount.from_orm(plan_account, plan_id),
                     is_message_displayable=True,
                     message="Account added successfully.",
                 )
@@ -801,18 +796,9 @@ class MoneyPlanMutations:
             logger.info(f"Error committing plan: {commit_result.message}")
             return graphql_common.ApplicationError(message=f"Failed to commit plan: {commit_result.message}")
 
-        # Get updated plan
-        plan_result = use_case.get_plan(plan_id)
-        if not plan_result.success:
-            logger.info(f"Error retrieving plan: {plan_result.message}")
-            return graphql_common.ApplicationError(
-                message=f"Failed to retrieve committed plan: {plan_result.message}"
-            )
-
-        return graphql_common.Success.from_node(
-            MoneyPlan.from_domain(plan_result.data),
+        return graphql_common.EmptySuccess(
             is_message_displayable=True,
-            message="Your money plan was committed successfully",
+            message="Your money plan was committed",
         )
 
     @strawberry.mutation(permission_classes=[IsAuthenticated])
@@ -826,15 +812,9 @@ class MoneyPlanMutations:
             if not archive_result.success:
                 return graphql_common.ApplicationError(message=archive_result.message)
 
-            # Get updated plan state
-            plan_result = use_case.get_plan(plan_id)
-            if not plan_result.success:
-                return graphql_common.ApplicationError(message=plan_result.message)
-
-            return graphql_common.Success.from_node(
-                MoneyPlan.from_domain(plan_result.data),
+            return graphql_common.EmptySuccess(
                 is_message_displayable=True,
-                message="Money plan archived successfully.",
+                message="Plan archived successfully.",
             )
         except (MoneyPlanError, ValueError) as e:
             logger.error("Error archiving plan: %s", str(e), exc_info=True)
@@ -877,23 +857,21 @@ class MoneyPlanMutations:
 
         try:
             plan_id = input.plan_id.node_id
+            account_id = input.account_id.node_id
+
             result = use_case.set_account_checked_state(
                 plan_id=plan_id,
-                account_id=input.account_id.node_id,
+                account_id=account_id,
                 is_checked=input.is_checked,
             )
 
             if not result.success:
                 return graphql_common.ApplicationError(message=result.message)
 
-            plan_result = use_case.get_plan(plan_id)
-            if not plan_result.success:
-                return graphql_common.ApplicationError(message=plan_result.message)
-
-            return graphql_common.Success.from_node(
-                MoneyPlan.from_domain(plan_result.data),
+            # Return the updated plan
+            return graphql_common.EmptySuccess(
                 is_message_displayable=True,
-                message="Account checked state updated successfully.",
+                message="Account checked off" if input.is_checked else "Account unchecked",
             )
         except (MoneyPlanError, ValueError) as e:
             logger.error(f"Error setting account checked state: {e}", exc_info=True)
@@ -913,12 +891,7 @@ class MoneyPlanMutations:
             if not result.success:
                 return graphql_common.ApplicationError(message=result.message)
 
-            plan_result = use_case.get_plan(plan_id)
-            if not plan_result.success:
-                return graphql_common.ApplicationError(message=plan_result.message)
-
-            return graphql_common.Success.from_node(
-                MoneyPlan.from_domain(plan_result.data),
+            return graphql_common.EmptySuccess(
                 is_message_displayable=True,
                 message="Plan notes updated successfully.",
             )
@@ -948,12 +921,7 @@ class MoneyPlanMutations:
             if not result.success:
                 return graphql_common.ApplicationError(message=result.message)
 
-            plan_result = use_case.get_plan(plan_id)
-            if not plan_result.success:
-                return graphql_common.ApplicationError(message=plan_result.message)
-
-            return graphql_common.Success.from_node(
-                MoneyPlan.from_domain(plan_result.data),
+            return graphql_common.EmptySuccess(
                 is_message_displayable=True,
                 message="Account notes updated successfully.",
             )
@@ -989,6 +957,7 @@ class AccountMutations:
             logger.error(f"Error creating account: {e}", exc_info=True)
             return graphql_common.ApplicationError(message=str(e))
 
+    # TODO improve naming
     @strawberry.mutation(permission_classes=[IsAuthenticated])
     @graphql_common.gql_error_handler
     def update(self, info: Info, input: UpdateAccountInput) -> graphql_common.MutationResponse:

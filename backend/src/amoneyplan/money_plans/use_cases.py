@@ -442,7 +442,9 @@ class MoneyPlanUseCases:
 
     @transaction.atomic
     def adjust_plan_balance(
-        self, plan_id: str, adjustment: Union[Money, float, str], reason: str = ""
+        self,
+        plan_id: str,
+        adjustment: Union[Money, float, str],
     ) -> UseCaseResult[None]:
         """
         Adjust the overall plan balance.
@@ -464,7 +466,7 @@ class MoneyPlanUseCases:
             plan = plan_result.data
 
             # Use the domain model's adjust_balance method
-            plan.adjust_balance(adjustment, reason)
+            plan.adjust_plan_balance(adjustment)
 
             # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)

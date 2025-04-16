@@ -45,8 +45,8 @@ class TestNotesSchema(TestGraphQLAPI):
             mutation EditPlanNotes($input: EditPlanNotesInput!) {
                 moneyPlan {
                     editPlanNotes(input: $input) {
-                        ... on Success {
-                            data
+                        ... on EmptySuccess {
+                            message
                         }
                         ... on ApplicationError {
                             message
@@ -64,7 +64,7 @@ class TestNotesSchema(TestGraphQLAPI):
 
         # Check the result
         assert "errors" not in result
-        assert "data" in result["moneyPlan"]["editPlanNotes"]
+        assert "message" in result["moneyPlan"]["editPlanNotes"]
 
         # Verify that the plan notes were updated in the domain model
         result = self.execute_query(
@@ -142,7 +142,7 @@ class TestNotesSchema(TestGraphQLAPI):
             },
         )
         assert "errors" not in result
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
+        account_id = result["moneyPlan"]["addAccount"]["data"]["account"]["id"]
 
         # Edit the account notes
         result = self.execute_query(
@@ -151,8 +151,8 @@ class TestNotesSchema(TestGraphQLAPI):
             mutation EditAccountNotes($input: EditAccountNotesInput!) {
                 moneyPlan {
                     editAccountNotes(input: $input) {
-                        ... on Success {
-                            data
+                        ... on EmptySuccess {
+                            message
                         }
                         ... on ApplicationError {
                             message
@@ -176,7 +176,7 @@ class TestNotesSchema(TestGraphQLAPI):
 
         # Check the result
         assert "errors" not in result
-        assert "data" in result["moneyPlan"]["editAccountNotes"]
+        assert "message" in result["moneyPlan"]["editAccountNotes"]
 
         # Verify that the account notes were saved
         result = self.execute_query(
@@ -186,6 +186,9 @@ class TestNotesSchema(TestGraphQLAPI):
                 moneyPlan(id: $id) {
                     accounts {
                         id
+                        account {
+                            id
+                        }
                         notes
                     }
                 }
@@ -197,7 +200,7 @@ class TestNotesSchema(TestGraphQLAPI):
 
         # Find the account in the result and check its notes
         account = next(
-            (a for a in result["moneyPlan"]["accounts"] if a["id"] == account_id),
+            (a for a in result["moneyPlan"]["accounts"] if a["account"]["id"] == account_id),
             None,
         )
         assert account is not None
@@ -238,8 +241,8 @@ class TestNotesSchema(TestGraphQLAPI):
         mutation ArchivePlan($input: ArchivePlanInput!) {
             moneyPlan {
                 archivePlan(input: $input) {
-                    ... on Success {
-                        data
+                    ... on EmptySuccess {
+                        message
                     }
                     ... on ApplicationError {
                         message
@@ -254,7 +257,7 @@ class TestNotesSchema(TestGraphQLAPI):
         archive_result = self.execute_query(
             client, archive_mutation, user=user, variables={"input": {"planId": plan_id}}
         )
-        assert "data" in archive_result["moneyPlan"]["archivePlan"]
+        assert "message" in archive_result["moneyPlan"]["archivePlan"]
 
         # Try to edit the plan notes
         result = self.execute_query(
@@ -352,8 +355,8 @@ class TestNotesSchema(TestGraphQLAPI):
         mutation ArchivePlan($input: ArchivePlanInput!) {
             moneyPlan {
                 archivePlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -368,7 +371,7 @@ class TestNotesSchema(TestGraphQLAPI):
         archive_result = self.execute_query(
             client, archive_mutation, user=user, variables={"input": {"planId": plan_id}}
         )
-        assert "data" in archive_result["moneyPlan"]["archivePlan"]
+        assert "message" in archive_result["moneyPlan"]["archivePlan"]
 
         # Try to edit the account notes
         result = self.execute_query(

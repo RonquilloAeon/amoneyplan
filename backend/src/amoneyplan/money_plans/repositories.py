@@ -290,7 +290,7 @@ class MoneyPlanRepository:
                 plan_account.notes = domain_plan_account.notes
                 plan_account.save()
             else:
-                account = Account.objects.get(id=domain_plan_account.account_id)
+                account = Account.objects.get(id=account_id)
 
                 # Create plan account
                 plan_account = PlanAccount(

@@ -6,6 +6,7 @@ import strawberry
 from strawberry import relay
 from strawberry.federation.schema_directives import Shareable
 from strawberry.scalars import JSON
+from strawberry.utils.str_converters import to_camel_case
 
 logger = logging.getLogger("django")
 
@@ -32,7 +33,7 @@ def serialize_node(node: Any) -> Any:
                 # Convert ID to base64
                 node_data["id"] = relay.to_base64(node.__class__.__name__, value)
             else:
-                node_data[key] = serialize_node(value)  # Recursively serialize fields
+                node_data[to_camel_case(key)] = serialize_node(value)  # Recursively serialize fields
 
         return node_data
 

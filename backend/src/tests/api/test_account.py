@@ -169,7 +169,7 @@ class TestAccountSchema(TestGraphQLAPI):
             },
         )
         assert "errors" not in result
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
+        account_id = result["moneyPlan"]["addAccount"]["data"]["account"]["id"]
 
         # Now change the account configuration
         result = self.execute_query(
@@ -500,7 +500,7 @@ class TestAccountSchema(TestGraphQLAPI):
             },
         )
         assert "errors" not in result
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
+        account_id = result["moneyPlan"]["addAccount"]["data"]["account"]["id"]
 
         if is_checked:
             # Commit the plan if needed for the test
@@ -508,8 +508,8 @@ class TestAccountSchema(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ... on Success {
-                            data
+                        ... on EmptySuccess {
+                            message
                         }
                         ... on ApplicationError {
                             message
@@ -523,7 +523,7 @@ class TestAccountSchema(TestGraphQLAPI):
             """
             commit_variables = {"input": {"planId": plan_id}}
             commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
-            assert "data" in commit_result["moneyPlan"]["commitPlan"]
+            assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Check off the account
         result = self.execute_query(
@@ -532,8 +532,8 @@ class TestAccountSchema(TestGraphQLAPI):
             mutation SetAccountCheckedState($input: SetAccountCheckedStateInput!) {
                 moneyPlan {
                     setAccountCheckedState(input: $input) {
-                        ... on Success {
-                            data
+                        ... on EmptySuccess {
+                            message
                         }
                         ... on ApplicationError {
                             message
@@ -555,7 +555,7 @@ class TestAccountSchema(TestGraphQLAPI):
             },
         )
         assert "errors" not in result
-        assert "data" in result["moneyPlan"]["setAccountCheckedState"]
+        assert "message" in result["moneyPlan"]["setAccountCheckedState"]
 
         # Verify the account is checked via query
         query_result = self.execute_query(
@@ -584,8 +584,8 @@ class TestAccountSchema(TestGraphQLAPI):
                 mutation SetAccountCheckedState($input: SetAccountCheckedStateInput!) {
                     moneyPlan {
                         setAccountCheckedState(input: $input) {
-                            ... on Success {
-                                data
+                            ... on EmptySuccess {
+                                message
                             }
                             ... on ApplicationError {
                                 message
@@ -609,7 +609,7 @@ class TestAccountSchema(TestGraphQLAPI):
             assert "errors" not in result
 
             if request == 0:
-                assert "data" in result["moneyPlan"]["setAccountCheckedState"]
+                assert "message" in result["moneyPlan"]["setAccountCheckedState"]
 
                 # Verify the account is unchecked via query
                 query_result = self.execute_query(
@@ -691,7 +691,7 @@ class TestAccountSchema(TestGraphQLAPI):
             }
         }
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
+        account_id = result["moneyPlan"]["addAccount"]["data"]["account"]["id"]
 
         # Query the plan to verify the account was added correctly
         query = """
@@ -703,6 +703,7 @@ class TestAccountSchema(TestGraphQLAPI):
                 accounts {
                     id
                     account {
+                        id
                         name
                     }
                     buckets {
@@ -725,7 +726,7 @@ class TestAccountSchema(TestGraphQLAPI):
 
         # Verify the account details
         account = plan["accounts"][0]
-        assert account["id"] == account_id
+        assert account["account"]["id"] == account_id
         assert account["account"]["name"] == "Test Account"
         assert len(account["buckets"]) == 2
 
@@ -789,7 +790,7 @@ class TestAccountSchema(TestGraphQLAPI):
             }
         }
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
-        account_id = result["moneyPlan"]["addAccount"]["data"]["id"]
+        account_id = result["moneyPlan"]["addAccount"]["data"]["account"]["id"]
 
         # Add a new bucket to the account using change_account_configuration
         change_config_mutation = """
@@ -833,6 +834,7 @@ class TestAccountSchema(TestGraphQLAPI):
                 accounts {
                     id
                     account {
+                        id
                         name
                     }
                     buckets {
@@ -855,7 +857,7 @@ class TestAccountSchema(TestGraphQLAPI):
 
         # Verify the account details
         account = plan["accounts"][0]
-        assert account["id"] == account_id
+        assert account["account"]["id"] == account_id
         assert account["account"]["name"] == "Test Account"
         assert len(account["buckets"]) == 2
 

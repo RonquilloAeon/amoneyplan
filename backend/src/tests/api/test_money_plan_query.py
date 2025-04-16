@@ -165,8 +165,8 @@ class TestMoneyPlan(TestGraphQLAPI):
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -181,7 +181,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         commit_variables = {"input": {"planId": plan1_id}}
         commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create and commit second plan
         result = self.execute_query(
@@ -247,8 +247,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ... on Success {
-                            data
+                        ... on EmptySuccess {
+                            message
                         }
                         ... on ApplicationError {
                             message
@@ -264,7 +264,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan2_id}},
         )
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Query all plans
         query = """
@@ -423,8 +423,8 @@ class TestMoneyPlan(TestGraphQLAPI):
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -439,7 +439,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         commit_variables = {"input": {"planId": plan1_id}}
         commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create second plan but don't commit it yet
         result = self.execute_query(
@@ -529,8 +529,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ...on Success {
-                            data
+                        ...on EmptySuccess {
+                            message
                         }
                         ...on ApplicationError {
                             message
@@ -546,7 +546,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan2_id}},
         )
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create a third plan and commit it
         result = self.execute_query(
@@ -612,8 +612,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ...on Success {
-                            data
+                        ...on EmptySuccess {
+                            message
                         }
                         ...on ApplicationError {
                             message
@@ -629,15 +629,14 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan3_id}},
         )
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Archive plan 3
         archive_mutation = """
         mutation ArchivePlan($input: ArchivePlanInput!) {
             moneyPlan {
                 archivePlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
                         message
                     }
                     ...on ApplicationError {
@@ -654,7 +653,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             client, archive_mutation, user=user, variables={"input": {"planId": plan3_id}}
         )
         assert "errors" not in archive_result
-        assert "data" in archive_result["moneyPlan"]["archivePlan"]
+        assert "message" in archive_result["moneyPlan"]["archivePlan"]
 
         # Test status=committed filter
         result = self.execute_query(client, query, user=user, variables={"filter": {"status": "committed"}})
@@ -788,8 +787,8 @@ class TestMoneyPlan(TestGraphQLAPI):
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -804,7 +803,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         result = self.execute_query(
             client, commit_mutation, user=user, variables={"input": {"planId": plan_id}}
         )
-        assert "data" in result["moneyPlan"]["commitPlan"]
+        assert "message" in result["moneyPlan"]["commitPlan"]
 
         # Query again - should return null since plan is committed
         result = self.execute_query(client, query, user=user)
@@ -962,8 +961,8 @@ class TestMoneyPlan(TestGraphQLAPI):
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -978,7 +977,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         commit_variables = {"input": {"planId": plan1_id}}
         commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create second plan
         variables2 = {"input": {"initialBalance": 3000.0, "notes": "Plan 2"}}

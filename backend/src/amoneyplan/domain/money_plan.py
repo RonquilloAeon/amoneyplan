@@ -365,13 +365,12 @@ class MoneyPlan:
         # Update the remaining balance
         self.remaining_balance -= amount
 
-    def adjust_plan_balance(self, adjustment: Union[Money, float, str], reason: str = ""):
+    def adjust_plan_balance(self, adjustment: Union[Money, float, str]):
         """
         Adjust the overall plan balance.
 
         Args:
             adjustment: The amount to adjust by (positive or negative)
-            reason: The reason for the adjustment
 
         Raises:
             PlanAlreadyCommittedError: If the plan is already committed
@@ -562,10 +561,10 @@ class MoneyPlan:
         if account_id not in self.accounts:
             raise AccountNotFoundError(f"Account with ID {account_id} not found")
 
-        account = self.accounts[account_id].account
+        plan_account = self.accounts[account_id].account
 
-        if account.is_checked != is_checked:
-            account.set_checked_state(is_checked)
+        if plan_account.is_checked != is_checked:
+            plan_account.set_checked_state(is_checked)
         else:
             raise AccountStateMatchError(
                 "Account is already checked" if is_checked else "Account is already unchecked"

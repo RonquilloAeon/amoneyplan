@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_PLAN, ARCHIVE_PLAN } from '@/lib/graphql/operations';
+import { GET_PLAN, ARCHIVE_PLAN, SET_ACCOUNT_CHECKED_STATE } from '@/lib/graphql/operations';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 import { useToast } from '@/lib/hooks/useToast';
 import { Plan } from '@/lib/hooks/usePlans';
@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Archive, ArrowLeft, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +34,7 @@ export default function PlanDetailsPage() {
   const encodedPlanId = params.planId as string;
   const planId = decodeURIComponent(encodedPlanId);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [checkingAccount, setCheckingAccount] = useState<string | null>(null);
   
   // For debugging
   useEffect(() => {
@@ -47,12 +49,106 @@ export default function PlanDetailsPage() {
     }
   }, [status, router, encodedPlanId]);
   
-  const { data, loading, error } = useQuery(GET_PLAN, {
+  const { data, loading, error, refetch } = useQuery(GET_PLAN, {
     variables: { id: planId },
     skip: !session || !planId,
   });
   
   const [archivePlanMutation] = useMutation(ARCHIVE_PLAN);
+  
+  const [setAccountCheckedState] = useMutation(SET_ACCOUNT_CHECKED_STATE, {
+    onCompleted: (data) => {
+      console.log("Detail page mutation completed:", data);
+      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
+        const successData = data.moneyPlan.setAccountCheckedState.data;
+        console.log("Success response data:", successData);
+        console.log("Updated accounts:", successData.accounts.map(acc => ({
+          planAccountId: acc.id,
+          isChecked: acc.isChecked,
+          name: acc.account.name
+        })));
+        
+        toast({
+          title: 'Success',
+          description: data.moneyPlan.setAccountCheckedState.message,
+        });
+        refetch();
+      } else if (data?.moneyPlan?.setAccountCheckedState.__typename === 'ApplicationError') {
+        console.error("Mutation error:", data.moneyPlan.setAccountCheckedState.message);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.moneyPlan.setAccountCheckedState.message,
+        });
+      }
+      setCheckingAccount(null);
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: `Failed to update account: ${error.message}`,
+      });
+      setCheckingAccount(null);
+    },
+    update: (cache, { data }) => {
+      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
+        try {
+          const updatedPlan = data.moneyPlan.setAccountCheckedState.data;
+          
+          // Update the individual plan query in the cache
+          cache.writeQuery({
+            query: GET_PLAN,
+            variables: { id: planId },
+            data: {
+              moneyPlan: updatedPlan
+            }
+          });
+          
+          console.log("Updated plan cache with new account state");
+        } catch (err) {
+          console.error("Error updating cache:", err);
+        }
+      }
+    }
+  });
+  
+  const handleToggleChecked = async (accountId: string, currentCheckedState: boolean) => {
+    if (!planId) return;
+    
+    console.log("Toggle checked for PlanAccount ID:", accountId);
+    console.log("Current checked state:", currentCheckedState);
+    
+    setCheckingAccount(accountId);
+    
+    // Create optimistic response to provide immediate feedback
+    const newState = !currentCheckedState;
+    
+    try {
+      await setAccountCheckedState({
+        variables: {
+          planId,
+          accountId: accountId,
+          isChecked: newState
+        },
+        optimisticResponse: {
+          moneyPlan: {
+            setAccountCheckedState: {
+              __typename: "Success",
+              message: `Account ${newState ? 'checked' : 'unchecked'} successfully.`,
+              data: {
+                // We'll ignore this data since we're doing an immediate refetch anyway
+                id: planId,
+                accounts: []
+              }
+            }
+          }
+        }
+      });
+    } catch (error) {
+      // Error is handled in the onError callback
+    }
+  };
   
   const plan: Plan = data?.moneyPlan;
   
@@ -250,47 +346,72 @@ export default function PlanDetailsPage() {
               <p className="text-muted-foreground">This plan doesn't have any accounts configured.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {plan.accounts.map((accountItem) => (
-                <Card key={accountItem.id} className="shadow-sm">
-                  <CardHeader>
+            <div className="grid grid-cols-1 gap-4">
+              {plan.accounts.map((account) => (
+                <Card key={account.id} className="shadow-sm">
+                  <CardHeader className="py-4">
                     <div className="flex justify-between items-center">
-                      <CardTitle>{accountItem.account.name}</CardTitle>
-                      <div>
-                        {accountItem.isChecked && (
-                          <Badge className="bg-blue-500">Checked</Badge>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center h-5">
+                          <Checkbox
+                            id={`account-${planId}-${account.id}`}
+                            checked={account.isChecked}
+                            disabled={plan.isArchived || checkingAccount === account.id}
+                            onCheckedChange={() => {
+                              console.log(`Detail page: Checkbox clicked for PlanAccount [${account.id}]`);
+                              console.log(`Current isChecked state: ${account.isChecked}`);
+                              console.log(`Plan ID: ${planId}`);
+                              handleToggleChecked(account.id, account.isChecked);
+                            }}
+                            className="data-[state=checked]:bg-green-500 data-[state=checked]:text-white"
+                          />
+                        </div>
+                        <CardTitle 
+                          className={`text-lg ${account.isChecked ? 'line-through text-muted-foreground' : ''}`}
+                        >
+                          {account.account.name}
+                        </CardTitle>
+                        {checkingAccount === account.id && (
+                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
                         )}
                       </div>
+                      <p className="text-xl font-bold">
+                        {formatCurrency(account.buckets.reduce((sum, bucket) => sum + bucket.allocatedAmount, 0))}
+                      </p>
                     </div>
-                    {accountItem.notes && (
-                      <CardDescription className="mt-2 whitespace-pre-wrap">
-                        {accountItem.notes}
-                      </CardDescription>
-                    )}
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <h3 className="font-medium">Buckets</h3>
-                      {accountItem.buckets.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No buckets configured</p>
-                      ) : (
+                    {account.notes && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-medium text-muted-foreground mb-1">Notes</h4>
+                        <div className="bg-gray-50 p-3 rounded-md text-sm">
+                          {account.notes}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {account.buckets.length > 0 ? (
+                      <div>
+                        <h4 className="text-sm font-medium text-muted-foreground mb-2">Allocations</h4>
                         <div className="space-y-2">
-                          {accountItem.buckets.map((bucket) => (
-                            <div key={bucket.id} className="flex justify-between items-center py-2 border-b last:border-0">
+                          {account.buckets.map((bucket) => (
+                            <div key={bucket.id} className="flex justify-between items-center p-2 border-b last:border-b-0">
                               <div>
-                                <p className="font-medium">{bucket.name}</p>
+                                <p className={`font-medium ${account.isChecked ? 'line-through text-muted-foreground' : ''}`}>
+                                  {bucket.name}
+                                </p>
                                 <p className="text-xs text-muted-foreground">{bucket.category}</p>
                               </div>
-                              <p className="font-bold">{formatCurrency(bucket.allocatedAmount)}</p>
+                              <p className={`font-semibold ${account.isChecked ? 'text-muted-foreground' : ''}`}>
+                                {formatCurrency(bucket.allocatedAmount)}
+                              </p>
                             </div>
                           ))}
-                          <div className="flex justify-between items-center pt-2 mt-2 border-t">
-                            <p className="font-semibold">Total</p>
-                            <p className="font-bold">{formatCurrency(accountItem.buckets.reduce((sum, bucket) => sum + bucket.allocatedAmount, 0))}</p>
-                          </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No allocations for this account</p>
+                    )}
                   </CardContent>
                 </Card>
               ))}

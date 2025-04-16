@@ -1,23 +1,27 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@apollo/client';
-import { GET_PLANS } from '@/lib/graphql/operations';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_PLANS, SET_ACCOUNT_CHECKED_STATE } from '@/lib/graphql/operations';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
+import { useToast } from '@/lib/hooks/useToast';
 import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Loader2, ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plan } from '@/lib/hooks/usePlans';
 
 export default function PlansListPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pagination = usePagination<Plan>(5); // Show 5 plans per page
+  const { toast } = useToast();
+  const [checkingAccount, setCheckingAccount] = useState<{ planId: string, accountId: string } | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -26,15 +30,186 @@ export default function PlansListPage() {
     }
   }, [status, router]);
 
-  const { data, loading, error } = useQuery(GET_PLANS, {
+  const { data, loading, error, refetch } = useQuery(GET_PLANS, {
     variables: pagination.variables,
     skip: !session,
     onCompleted: (data) => {
       if (data?.moneyPlans?.pageInfo) {
         pagination.updatePageInfo(data.moneyPlans.pageInfo);
       }
+      
+      // Log all plans and their accounts for debugging
+      if (data?.moneyPlans?.edges) {
+        console.log("Plans loaded:", data.moneyPlans.edges.length);
+        data.moneyPlans.edges.forEach((edge, i) => {
+          const plan = edge.node;
+          console.log(`Plan ${i + 1} (${plan.id}):`, {
+            isCommitted: plan.isCommitted,
+            accounts: plan.accounts.map(acc => ({
+              planAccountId: acc.id,
+              accountId: acc.account.id,
+              name: acc.account.name,
+              isChecked: acc.isChecked
+            }))
+          });
+        });
+      }
     },
   });
+
+  // Debug effect to monitor plan accounts
+  useEffect(() => {
+    if (data?.moneyPlans?.edges) {
+      const allPlans = data.moneyPlans.edges.map(edge => edge.node);
+      const accountsInMultiplePlans: Record<string, Array<{planId: string, planAccountId: string, isChecked: boolean}>> = {};
+      
+      // Build a map of base account IDs to all plans they appear in
+      allPlans.forEach(plan => {
+        plan.accounts.forEach(planAccount => {
+          const baseAccountId = planAccount.account.id;
+          if (!accountsInMultiplePlans[baseAccountId]) {
+            accountsInMultiplePlans[baseAccountId] = [];
+          }
+          accountsInMultiplePlans[baseAccountId].push({
+            planId: plan.id,
+            planAccountId: planAccount.id,
+            isChecked: planAccount.isChecked
+          });
+        });
+      });
+      
+      // Log accounts that appear in multiple plans
+      Object.entries(accountsInMultiplePlans)
+        .filter(([_, plans]) => plans.length > 1)
+        .forEach(([baseAccountId, plans]) => {
+          console.log(`Account ${baseAccountId} appears in ${plans.length} plans:`);
+          plans.forEach(p => {
+            console.log(`  Plan ${p.planId}: PlanAccount ${p.planAccountId}, isChecked: ${p.isChecked}`);
+          });
+        });
+    }
+  }, [data]);
+
+  const [setAccountCheckedState] = useMutation(SET_ACCOUNT_CHECKED_STATE, {
+    onCompleted: (data) => {
+      console.log("Mutation completed:", data);
+      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
+        const successData = data.moneyPlan.setAccountCheckedState.data;
+        console.log("Success response data:", successData);
+        console.log("Updated accounts:", successData.accounts.map(acc => ({
+          planAccountId: acc.id,
+          isChecked: acc.isChecked,
+          name: acc.account.name
+        })));
+        
+        toast({
+          title: 'Success',
+          description: data.moneyPlan.setAccountCheckedState.message,
+        });
+        console.log("Refetching plans data after successful update");
+        refetch();
+      } else if (data?.moneyPlan?.setAccountCheckedState.__typename === 'ApplicationError') {
+        console.error("Mutation error:", data.moneyPlan.setAccountCheckedState.message);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: data.moneyPlan.setAccountCheckedState.message,
+        });
+      }
+      setCheckingAccount(null);
+    },
+    onError: (error) => {
+      console.error("Mutation error:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: `Failed to update account: ${error.message}`,
+      });
+      setCheckingAccount(null);
+    },
+    update: (cache, { data }) => {
+      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
+        // The backend returns the updated plan, but the cache holds multiple plans,
+        // so we need to update the specific plan and account that was changed
+        try {
+          const updatedPlan = data.moneyPlan.setAccountCheckedState.data;
+          const currentPlansData = cache.readQuery({
+            query: GET_PLANS,
+            variables: pagination.variables
+          }) as any; // Use any temporarily to bypass TypeScript constraints
+          
+          if (currentPlansData?.moneyPlans) {
+            console.log("Updating cache with new checked state");
+            // Create a new copy of the plans data with the updated account
+            const updatedEdges = currentPlansData.moneyPlans.edges.map(edge => {
+              if (edge.node.id === updatedPlan.id) {
+                // This is the plan that was updated
+                console.log("Found plan to update in cache:", edge.node.id);
+                return {
+                  ...edge,
+                  node: {
+                    ...edge.node,
+                    accounts: updatedPlan.accounts
+                  }
+                };
+              }
+              return edge;
+            });
+            
+            // Write back the updated query result
+            cache.writeQuery({
+              query: GET_PLANS,
+              variables: pagination.variables,
+              data: {
+                moneyPlans: {
+                  ...currentPlansData.moneyPlans,
+                  edges: updatedEdges
+                }
+              }
+            });
+          }
+        } catch (err) {
+          console.error("Error updating cache:", err);
+        }
+      }
+    }
+  });
+
+  const handleToggleChecked = async (planId: string, accountId: string, currentCheckedState: boolean) => {
+    console.log("Toggle checked for plan:", planId);
+    console.log("Toggle checked for PlanAccount ID:", accountId);
+    console.log("Current checked state:", currentCheckedState);
+    
+    setCheckingAccount({ planId, accountId });
+    
+    // Create optimistic response to provide immediate feedback
+    const newState = !currentCheckedState;
+    
+    try {
+      await setAccountCheckedState({
+        variables: {
+          planId,
+          accountId,
+          isChecked: newState
+        },
+        optimisticResponse: {
+          moneyPlan: {
+            setAccountCheckedState: {
+              __typename: "Success",
+              message: `Account ${newState ? 'checked' : 'unchecked'} successfully.`,
+              data: {
+                // We'll ignore this data since we're doing an immediate refetch anyway
+                id: planId,
+                accounts: []
+              }
+            }
+          }
+        }
+      });
+    } catch (error) {
+      // Error is handled in the onError callback
+    }
+  };
 
   const plans = data?.moneyPlans?.edges?.map(edge => edge.node) || [];
 
@@ -128,17 +303,48 @@ export default function PlansListPage() {
                         {plan.accounts.map((account) => (
                           <div key={account.id} className="py-2">
                             <div className="flex justify-between items-center">
-                              <p className="font-medium">{account.account.name}</p>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center h-5">
+                                  <Checkbox
+                                    id={`account-${plan.id}-${account.id}`}
+                                    checked={account.isChecked}
+                                    disabled={
+                                      plan.isArchived || 
+                                      (checkingAccount?.planId === plan.id && checkingAccount?.accountId === account.id)
+                                    }
+                                    onCheckedChange={() => {
+                                      console.log(`Checkbox clicked for PlanAccount [${account.id}]`);
+                                      console.log(`Current isChecked state: ${account.isChecked}`);
+                                      console.log(`Parent Plan ID: ${plan.id}`);
+                                      handleToggleChecked(plan.id, account.id, account.isChecked);
+                                    }}
+                                    className="data-[state=checked]:bg-green-500 data-[state=checked]:text-white"
+                                  />
+                                </div>
+                                <label 
+                                  htmlFor={`account-${plan.id}-${account.id}`}
+                                  className={`font-medium ${account.isChecked ? 'line-through text-muted-foreground' : ''}`}
+                                >
+                                  {account.account.name}
+                                </label>
+                                {checkingAccount?.planId === plan.id && checkingAccount?.accountId === account.id && (
+                                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                                )}
+                              </div>
                               <p className="text-sm font-bold">
                                 {formatCurrency(account.buckets.reduce((sum, bucket) => sum + bucket.allocatedAmount, 0))}
                               </p>
                             </div>
                             {account.buckets.length > 0 && (
-                              <div className="mt-1 pl-4 space-y-1">
+                              <div className="mt-1 pl-10 space-y-1">
                                 {account.buckets.map((bucket) => (
                                   <div key={bucket.id} className="flex justify-between items-center text-sm">
-                                    <p className="text-muted-foreground">{bucket.name}</p>
-                                    <p>{formatCurrency(bucket.allocatedAmount)}</p>
+                                    <p className={`text-muted-foreground ${account.isChecked ? 'line-through' : ''}`}>
+                                      {bucket.name}
+                                    </p>
+                                    <p className={account.isChecked ? 'text-muted-foreground' : ''}>
+                                      {formatCurrency(bucket.allocatedAmount)}
+                                    </p>
                                   </div>
                                 ))}
                               </div>

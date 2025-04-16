@@ -152,8 +152,8 @@ class TestMoneyPlan(TestGraphQLAPI):
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -168,7 +168,7 @@ class TestMoneyPlan(TestGraphQLAPI):
         commit_variables = {"input": {"planId": plan1_id}}
         commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create second plan
         variables2 = {"input": {"initialBalance": 2000.0, "notes": "Plan 2"}}
@@ -305,8 +305,8 @@ class TestMoneyPlan(TestGraphQLAPI):
         mutation CommitPlan($input: CommitPlanInput!) {
             moneyPlan {
                 commitPlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
+                        message
                     }
                     ...on ApplicationError {
                         message
@@ -324,7 +324,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             user=user,
             variables={"input": {"planId": plan1_id}},
         )
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Now we should be able to create another plan
         result3 = self.execute_query(
@@ -440,8 +440,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ...on Success {
-                            data
+                        ...on EmptySuccess {
+                            message
                         }
                         ...on ApplicationError {
                             message
@@ -457,7 +457,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan1_id}},
         )
         assert "errors" not in result
-        assert "data" in result["moneyPlan"]["commitPlan"]
+        assert "message" in result["moneyPlan"]["commitPlan"]
 
         # Now create a second plan with copied structure
         result = self.execute_query(
@@ -579,8 +579,8 @@ class TestMoneyPlan(TestGraphQLAPI):
 
         assert "errors" not in result
         assert "data" in result["moneyPlan"]["startPlan"]
-        assert result["moneyPlan"]["startPlan"]["data"]["plan_date"] == future_date
-        assert result["moneyPlan"]["startPlan"]["data"]["created_at"] is not None
+        assert result["moneyPlan"]["startPlan"]["data"]["planDate"] == future_date
+        assert result["moneyPlan"]["startPlan"]["data"]["createdAt"] is not None
 
     def test_create_plan_with_account(self, client):
         """Test creating a plan with an account."""

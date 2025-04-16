@@ -46,7 +46,7 @@ export default function PlansPage() {
     plans, 
     draftPlan, 
     loading, 
-    error, 
+    error,
     createPlan, 
     updatePlan, 
     commitPlan, 
@@ -67,17 +67,6 @@ export default function PlansPage() {
   const [isCommitting, setIsCommitting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-
-  // Display error in toast if it exists
-  useEffect(() => {
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error
-      });
-    }
-  }, [error, toast]);
 
   // Refetch accounts and plans when the component mounts
   useEffect(() => {

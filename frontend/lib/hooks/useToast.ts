@@ -176,7 +176,7 @@ toast.success = (message: string, title = "Success") => {
   return toast({
     title,
     description: message,
-    variant: "default",
+    variant: "success",
   })
 }
 

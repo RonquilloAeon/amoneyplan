@@ -29,9 +29,11 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: "border bg-white text-gray-900",
+        default: "border bg-background text-foreground",
         destructive:
           "destructive group border-red-500 bg-red-600 text-red-50",
+        success:
+          "success group border-green-500 bg-green-600 text-green-50",
       },
     },
     defaultVariants: {
@@ -77,7 +79,9 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-gray-500 opacity-0 transition-opacity hover:text-gray-900 focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-100 group-[.destructive]:hover:text-white group-[.destructive]:focus:ring-white group-[.destructive]:focus:ring-offset-red-600",
+      "absolute right-2 top-2 rounded-md p-1 text-gray-500 opacity-0 transition-opacity hover:text-gray-900 focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100",
+      "group-[.destructive]:text-red-100 group-[.destructive]:hover:text-white group-[.destructive]:focus:ring-white group-[.destructive]:focus:ring-offset-red-600",
+      "group-[.success]:text-green-100 group-[.success]:hover:text-white group-[.success]:focus:ring-white group-[.success]:focus:ring-offset-green-600",
       className
     )}
     toast-close=""
@@ -94,7 +98,10 @@ const ToastTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Title
     ref={ref}
-    className={cn("text-sm font-bold text-gray-900 group-[.destructive]:text-white", className)}
+    className={cn(
+      "text-sm font-bold text-gray-900 group-[.destructive]:text-white group-[.success]:text-white",
+      className
+    )}
     {...props}
   />
 ))
@@ -106,7 +113,10 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("text-sm text-gray-700 group-[.destructive]:text-red-50", className)}
+    className={cn(
+      "text-sm text-gray-700 group-[.destructive]:text-red-50 group-[.success]:text-white",
+      className
+    )}
     {...props}
   />
 ))

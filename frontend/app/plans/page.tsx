@@ -103,6 +103,7 @@ export default function PlansListPage() {
         toast({
           title: 'Success',
           description: message || 'Account state updated.', // Use message from response
+          variant: 'success', // Add success variant
         });
         console.log("Refetching plans data after successful update");
         refetch(); // Refetch to get confirmed data

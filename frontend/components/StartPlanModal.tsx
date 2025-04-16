@@ -44,7 +44,8 @@ export function StartPlanModal() {
       if (result) {
         toast({
           title: "Success",
-          description: "Plan created successfully"
+          description: "New plan started",
+          variant: "success",
         });
         setOpen(false);
         setInitialBalance('');

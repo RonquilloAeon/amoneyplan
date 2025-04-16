@@ -296,8 +296,7 @@ export const SET_ACCOUNT_CHECKED_STATE = gql`
   mutation SetAccountCheckedState($planId: GlobalID!, $accountId: GlobalID!, $isChecked: Boolean!) {
     moneyPlan {
       setAccountCheckedState(input: { planId: $planId, accountId: $accountId, isChecked: $isChecked }) {
-        ... on Success {
-          data
+        ... on EmptySuccess {
           message
         }
         ... on ApplicationError {

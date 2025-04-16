@@ -70,6 +70,7 @@ export default function PlanDetailsPage() {
         toast({
           title: 'Success',
           description: message || 'Account state updated.',
+          variant: 'success',
         });
         refetch();
       } else if (result?.__typename === 'ApplicationError') {

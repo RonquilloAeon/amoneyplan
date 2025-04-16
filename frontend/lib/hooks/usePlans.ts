@@ -242,7 +242,8 @@ export function usePlans() {
       
       toast({
         title: "Success",
-        description: "Plan successfully archived"
+        description: "Plan successfully archived",
+        variant: "success",
       });
       
       return data?.moneyPlan?.archivePlan.data;

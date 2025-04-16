@@ -12,15 +12,17 @@ class TestMoneyPlan(TestGraphQLAPI):
 
         query = """
         query GetMoneyPlan($planId: GlobalID!) {
-            moneyPlan(planId: $planId) {
+            moneyPlan(id: $planId) {
                 id
                 initialBalance
                 remainingBalance
                 accounts {
                     id
-                    name
+                    account {
+                        name
+                    }
                     buckets {
-                        bucketName
+                        name
                         category
                         allocatedAmount
                     }
@@ -47,7 +49,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             }
         }
         """
-        variables = {"input": {"initialBalance": 1000.0, "notes": "Test plan"}}
+        variables = {"input": {"initialBalance": 1000.0, "notes": "Test Plan"}}
 
         result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
         assert "errors" not in result
@@ -74,21 +76,27 @@ class TestMoneyPlan(TestGraphQLAPI):
         account_variables = {
             "input": {
                 "planId": plan_id,
-                "name": "Test Account",
-                "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 1000.0}],
+                "accountId": self.create_account(client, user, "Test Account"),
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
             }
         }
 
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
+        assert "errors" not in result
         assert "data" in result["moneyPlan"]["addAccount"]
 
-        # Now query the created plan
+        # Query the plan
         result = self.execute_query(client, query, user=user, variables={"planId": plan_id})
         assert "errors" not in result
+        assert result["moneyPlan"]["id"] == plan_id
         assert result["moneyPlan"]["initialBalance"] == 1000.0
-        assert result["moneyPlan"]["isCommitted"] is False
+        assert result["moneyPlan"]["remainingBalance"] == 0.0
         assert len(result["moneyPlan"]["accounts"]) == 1
-        assert result["moneyPlan"]["accounts"][0]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
+        assert len(result["moneyPlan"]["accounts"][0]["buckets"]) == 1
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0
+        assert not result["moneyPlan"]["isCommitted"]
 
     def test_money_plans_query(self, client, money_planner):
         """Test querying all money plans with pagination."""
@@ -145,38 +153,35 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan1_id,
-                    "name": "Account 1",
-                    "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 1000.0}],
+                    "accountId": self.create_account(client, user, "Account 1"),
+                    "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
                 }
             },
         )
         assert "errors" not in result
 
         # Commit first plan
-        commit_result = self.execute_query(
-            client,
-            """
-            mutation CommitPlan($input: CommitPlanInput!) {
-                moneyPlan {
-                    commitPlan(input: $input) {
-                        ... on Success {
-                            data
-                        }
-                        ... on ApplicationError {
-                            message
-                        }
-                        ... on UnexpectedError {
-                            message
-                        }
+        commit_mutation = """
+        mutation CommitPlan($input: CommitPlanInput!) {
+            moneyPlan {
+                commitPlan(input: $input) {
+                    ...on EmptySuccess {
+                        message
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
                     }
                 }
             }
-            """,
-            user=user,
-            variables={"input": {"planId": plan1_id}},
-        )
+        }
+        """
+        commit_variables = {"input": {"planId": plan1_id}}
+        commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create and commit second plan
         result = self.execute_query(
@@ -228,8 +233,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan2_id,
-                    "name": "Account 2",
-                    "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 2000.0}],
+                    "accountId": self.create_account(client, user, "Account 2"),
+                    "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 2000.0}],
                 }
             },
         )
@@ -242,8 +247,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ... on Success {
-                            data
+                        ... on EmptySuccess {
+                            message
                         }
                         ... on ApplicationError {
                             message
@@ -259,7 +264,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan2_id}},
         )
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Query all plans
         query = """
@@ -406,38 +411,35 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan1_id,
-                    "name": "Account 1",
-                    "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 1000.0}],
+                    "accountId": self.create_account(client, user, "Account 1"),
+                    "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
                 }
             },
         )
         assert "errors" not in result
 
         # Commit plan 1
-        commit_result = self.execute_query(
-            client,
-            """
-            mutation CommitPlan($input: CommitPlanInput!) {
-                moneyPlan {
-                    commitPlan(input: $input) {
-                        ...on Success {
-                            data
-                        }
-                        ...on ApplicationError {
-                            message
-                        }
-                        ...on UnexpectedError {
-                            message
-                        }
+        commit_mutation = """
+        mutation CommitPlan($input: CommitPlanInput!) {
+            moneyPlan {
+                commitPlan(input: $input) {
+                    ...on EmptySuccess {
+                        message
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
                     }
                 }
             }
-            """,
-            user=user,
-            variables={"input": {"planId": plan1_id}},
-        )
+        }
+        """
+        commit_variables = {"input": {"planId": plan1_id}}
+        commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create second plan but don't commit it yet
         result = self.execute_query(
@@ -489,8 +491,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan2_id,
-                    "name": "Account 2",
-                    "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 2000.0}],
+                    "accountId": self.create_account(client, user, "Account 2"),
+                    "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 2000.0}],
                 }
             },
         )
@@ -527,8 +529,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ...on Success {
-                            data
+                        ...on EmptySuccess {
+                            message
                         }
                         ...on ApplicationError {
                             message
@@ -544,7 +546,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan2_id}},
         )
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Create a third plan and commit it
         result = self.execute_query(
@@ -596,8 +598,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={
                 "input": {
                     "planId": plan3_id,
-                    "name": "Account 3",
-                    "buckets": [{"bucketName": "Default", "category": "default", "allocatedAmount": 3000.0}],
+                    "accountId": self.create_account(client, user, "Account 3"),
+                    "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 3000.0}],
                 }
             },
         )
@@ -610,8 +612,8 @@ class TestMoneyPlan(TestGraphQLAPI):
             mutation CommitPlan($input: CommitPlanInput!) {
                 moneyPlan {
                     commitPlan(input: $input) {
-                        ...on Success {
-                            data
+                        ...on EmptySuccess {
+                            message
                         }
                         ...on ApplicationError {
                             message
@@ -627,15 +629,14 @@ class TestMoneyPlan(TestGraphQLAPI):
             variables={"input": {"planId": plan3_id}},
         )
         assert "errors" not in commit_result
-        assert "data" in commit_result["moneyPlan"]["commitPlan"]
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
 
         # Archive plan 3
         archive_mutation = """
         mutation ArchivePlan($input: ArchivePlanInput!) {
             moneyPlan {
                 archivePlan(input: $input) {
-                    ...on Success {
-                        data
+                    ...on EmptySuccess {
                         message
                     }
                     ...on ApplicationError {
@@ -652,7 +653,7 @@ class TestMoneyPlan(TestGraphQLAPI):
             client, archive_mutation, user=user, variables={"input": {"planId": plan3_id}}
         )
         assert "errors" not in archive_result
-        assert "data" in archive_result["moneyPlan"]["archivePlan"]
+        assert "message" in archive_result["moneyPlan"]["archivePlan"]
 
         # Test status=committed filter
         result = self.execute_query(client, query, user=user, variables={"filter": {"status": "committed"}})
@@ -678,3 +679,366 @@ class TestMoneyPlan(TestGraphQLAPI):
         assert edges[0]["node"]["initialBalance"] == 3000.0  # Plan 3
         assert edges[0]["node"]["isArchived"]
         assert edges[0]["node"]["isCommitted"]
+
+    def test_draft_money_plan_query(self, client):
+        """Test querying the current draft money plan."""
+        user = self.get_test_user(client)
+
+        # First, query when there's no draft plan
+        query = """
+        query DraftMoneyPlan {
+            draftMoneyPlan {
+                id
+                initialBalance
+                remainingBalance
+                accounts {
+                    id
+                    account {
+                        name
+                    }
+                    buckets {
+                        name
+                        category
+                        allocatedAmount
+                    }
+                }
+                notes
+                isCommitted
+                isArchived
+                createdAt
+                planDate
+                archivedAt
+            }
+        }
+        """
+        result = self.execute_query(client, query, user=user)
+        assert result["draftMoneyPlan"] is None
+
+        # Create a draft plan
+        create_plan_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        variables = {"input": {"initialBalance": 1000.0, "notes": "Test draft plan"}}
+
+        result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
+        assert "errors" not in result
+        plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add an account with a bucket
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        account_variables = {
+            "input": {
+                "planId": plan_id,
+                "accountId": self.create_account(client, user, "Test Account"),
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
+            }
+        }
+
+        result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
+        assert "data" in result["moneyPlan"]["addAccount"]
+
+        # Now query the draft plan
+        result = self.execute_query(client, query, user=user)
+        draft_plan = result["draftMoneyPlan"]
+        assert draft_plan is not None
+        assert draft_plan["id"] == plan_id
+        assert draft_plan["initialBalance"] == 1000.0
+        assert draft_plan["remainingBalance"] == 0.0
+        assert draft_plan["notes"] == "Test draft plan"
+        assert not draft_plan["isCommitted"]
+        assert not draft_plan["isArchived"]
+        assert len(draft_plan["accounts"]) == 1
+        assert draft_plan["accounts"][0]["account"]["name"] == "Test Account"
+        assert len(draft_plan["accounts"][0]["buckets"]) == 1
+        assert draft_plan["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0
+
+        # Commit the plan
+        commit_mutation = """
+        mutation CommitPlan($input: CommitPlanInput!) {
+            moneyPlan {
+                commitPlan(input: $input) {
+                    ...on EmptySuccess {
+                        message
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        result = self.execute_query(
+            client, commit_mutation, user=user, variables={"input": {"planId": plan_id}}
+        )
+        assert "message" in result["moneyPlan"]["commitPlan"]
+
+        # Query again - should return null since plan is committed
+        result = self.execute_query(client, query, user=user)
+        assert result["draftMoneyPlan"] is None
+
+    def test_query_money_plan(self, client):
+        """Test querying a money plan."""
+        user = self.get_test_user(client)
+
+        # Create a plan
+        create_plan_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        variables = {"input": {"initialBalance": 1000.0, "notes": "Test Plan"}}
+
+        result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
+        assert "errors" not in result
+        plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add an account
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        account_variables = {
+            "input": {
+                "planId": plan_id,
+                "accountId": self.create_account(client, user, "Test Account"),
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 1000.0}],
+            }
+        }
+
+        result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
+        assert "errors" not in result
+        assert "data" in result["moneyPlan"]["addAccount"]
+
+        # Query the plan
+        query = """
+        query GetMoneyPlan($id: GlobalID!) {
+            moneyPlan(id: $id) {
+                id
+                initialBalance
+                remainingBalance
+                accounts {
+                    id
+                    account {
+                        name
+                    }
+                    buckets {
+                        name
+                        category
+                        allocatedAmount
+                    }
+                }
+            }
+        }
+        """
+
+        result = self.execute_query(client, query, user=user, variables={"id": plan_id})
+        assert "errors" not in result
+        assert result["moneyPlan"]["initialBalance"] == 1000.0
+        assert result["moneyPlan"]["remainingBalance"] == 0.0
+        assert len(result["moneyPlan"]["accounts"]) == 1
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Test Account"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 1000.0
+
+    def test_query_multiple_plans(self, client):
+        """Test querying multiple money plans."""
+        user = self.get_test_user(client)
+
+        # Create first plan
+        create_plan_mutation = """
+        mutation StartPlan($input: PlanStartInput!) {
+            moneyPlan {
+                startPlan(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        variables1 = {"input": {"initialBalance": 2000.0, "notes": "Plan 1"}}
+
+        result1 = self.execute_query(client, create_plan_mutation, user=user, variables=variables1)
+        assert "errors" not in result1
+        plan1_id = result1["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add account to first plan
+        add_account_mutation = """
+        mutation AddAccount($input: AddAccountInput!) {
+            moneyPlan {
+                addAccount(input: $input) {
+                    ...on Success {
+                        data
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        account_variables1 = {
+            "input": {
+                "planId": plan1_id,
+                "accountId": self.create_account(client, user, "Account 1"),
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 2000.0}],
+            }
+        }
+
+        result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables1)
+        assert "errors" not in result
+        assert "data" in result["moneyPlan"]["addAccount"]
+
+        # Commit first plan
+        commit_mutation = """
+        mutation CommitPlan($input: CommitPlanInput!) {
+            moneyPlan {
+                commitPlan(input: $input) {
+                    ...on EmptySuccess {
+                        message
+                    }
+                    ...on ApplicationError {
+                        message
+                    }
+                    ...on UnexpectedError {
+                        message
+                    }
+                }
+            }
+        }
+        """
+        commit_variables = {"input": {"planId": plan1_id}}
+        commit_result = self.execute_query(client, commit_mutation, user=user, variables=commit_variables)
+        assert "errors" not in commit_result
+        assert "message" in commit_result["moneyPlan"]["commitPlan"]
+
+        # Create second plan
+        variables2 = {"input": {"initialBalance": 3000.0, "notes": "Plan 2"}}
+        result2 = self.execute_query(client, create_plan_mutation, user=user, variables=variables2)
+        assert "errors" not in result2
+        plan2_id = result2["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add account to second plan
+        account_variables2 = {
+            "input": {
+                "planId": plan2_id,
+                "accountId": self.create_account(client, user, "Account 2"),
+                "buckets": [{"name": "Default", "category": "default", "allocatedAmount": 3000.0}],
+            }
+        }
+
+        result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables2)
+        assert "errors" not in result
+        assert "data" in result["moneyPlan"]["addAccount"]
+
+        # Query both plans
+        query = """
+        query GetMoneyPlan($id: GlobalID!) {
+            moneyPlan(id: $id) {
+                id
+                initialBalance
+                remainingBalance
+                notes
+                accounts {
+                    id
+                    account {
+                        name
+                    }
+                    buckets {
+                        name
+                        category
+                        allocatedAmount
+                    }
+                }
+            }
+        }
+        """
+
+        # Check first plan
+        result = self.execute_query(client, query, user=user, variables={"id": plan1_id})
+        assert "errors" not in result
+        assert result["moneyPlan"]["initialBalance"] == 2000.0
+        assert result["moneyPlan"]["remainingBalance"] == 0.0
+        assert result["moneyPlan"]["notes"] == "Plan 1"
+        assert len(result["moneyPlan"]["accounts"]) == 1
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Account 1"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 2000.0
+
+        # Check second plan
+        result = self.execute_query(client, query, user=user, variables={"id": plan2_id})
+        assert "errors" not in result
+        assert result["moneyPlan"]["initialBalance"] == 3000.0
+        assert result["moneyPlan"]["remainingBalance"] == 0.0
+        assert result["moneyPlan"]["notes"] == "Plan 2"
+        assert len(result["moneyPlan"]["accounts"]) == 1
+        assert result["moneyPlan"]["accounts"][0]["account"]["name"] == "Account 2"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["name"] == "Default"
+        assert result["moneyPlan"]["accounts"][0]["buckets"][0]["allocatedAmount"] == 3000.0

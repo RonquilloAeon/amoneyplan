@@ -5,47 +5,132 @@ from django.db import transaction
 
 from amoneyplan.accounts.tenancy import get_current_account
 from amoneyplan.domain.account import Account as DomainAccount
-from amoneyplan.domain.account import Bucket as DomainBucket
-from amoneyplan.domain.account import PlanAccountAllocation
 from amoneyplan.domain.money import Money
-from amoneyplan.domain.money_plan import MoneyPlan as DomainMoneyPlan
+from amoneyplan.domain.money_plan import (
+    Bucket as DomainBucket,
+)
+from amoneyplan.domain.money_plan import (
+    MoneyPlan as DomainMoneyPlan,
+)
+from amoneyplan.domain.money_plan import (
+    PlanAccount as DomainPlanAccount,
+)
+from amoneyplan.domain.money_plan import (
+    PlanAccountAllocation,
+)
 
 from .models import Account, Bucket, MoneyPlan, PlanAccount
+
+
+class AccountRepository:
+    """Repository for Account entity."""
+
+    def __init__(self):
+        self._user_account = get_current_account()
+
+    def get_by_id(self, account_id: str) -> Optional[DomainAccount]:
+        """
+        Get an account by ID and user account.
+
+        Args:
+            account_id: The ID of the account to retrieve
+
+        Returns:
+            Domain model instance of the account or None if not found
+        """
+        try:
+            orm_account = Account.objects.get(id=account_id)
+            return self._to_domain(orm_account)
+        except Account.DoesNotExist:
+            return None
+
+    def get_all(self) -> List[DomainAccount]:
+        """
+        Get all accounts for the current user account.
+
+        Returns:
+            List of domain model instances of accounts
+        """
+        orm_accounts = Account.objects.all()
+        return [self._to_domain(account) for account in orm_accounts]
+
+    @transaction.atomic
+    def save(self, account: DomainAccount) -> None:
+        """
+        Save a domain account to the database.
+
+        Args:
+            account: Domain account object to save
+        """
+        # Find or create the Django model instance
+        try:
+            orm_account = Account.objects.get(id=account.id)
+        except Account.DoesNotExist:
+            orm_account = None
+
+        # Convert domain model to ORM model
+        orm_account = self._from_domain(account, orm_account)
+
+        # Save the model
+        orm_account.save()
+
+    def _to_domain(self, orm_account: Account) -> DomainAccount:
+        """Convert an ORM account to a domain account."""
+        return DomainAccount(
+            id=orm_account.id,
+            name=orm_account.name,
+            notes=orm_account.notes if hasattr(orm_account, "notes") else "",
+        )
+
+    def _from_domain(self, domain_account: DomainAccount, orm_account: Optional[Account] = None) -> Account:
+        """Convert a domain account to an ORM account."""
+        if not orm_account:
+            orm_account = Account(
+                id=domain_account.id,
+                user_account=self._user_account,
+            )
+
+        orm_account.name = domain_account.name
+        if hasattr(orm_account, "notes"):
+            orm_account.notes = domain_account.notes
+
+        return orm_account
 
 
 # Add domain adapter functions to convert between Django models and domain objects
 def to_domain_bucket(bucket: Bucket) -> DomainBucket:
     """Convert a Django Bucket model to a domain Bucket object."""
     return DomainBucket(
-        bucket_name=bucket.name, category=bucket.category, allocated_amount=Money(bucket.allocated_amount)
+        name=bucket.name, category=bucket.category, allocated_amount=Money(bucket.allocated_amount)
     )
 
 
-def to_domain_account(account: Account, plan_account: PlanAccount, buckets: List[Bucket]) -> DomainAccount:
+def to_domain_plan_account(
+    account: Account, plan_account: PlanAccount, buckets: List[Bucket]
+) -> DomainPlanAccount:
     """Convert Django Account and PlanAccount models to a domain Account object."""
-    domain_account = DomainAccount(
+    domain_plan_account = DomainPlanAccount(
         account_id=account.id,
-        name=account.name,
+        buckets={},
         is_checked=plan_account.is_checked,
         notes=plan_account.notes,
-        buckets={},
     )
 
     # Add buckets
     for bucket in buckets:
         domain_bucket = to_domain_bucket(bucket)
-        domain_account.buckets[domain_bucket.bucket_name] = domain_bucket
+        domain_plan_account.buckets[domain_bucket.name] = domain_bucket
 
-    return domain_account
+    return domain_plan_account
 
 
 def to_domain_plan_account_allocation(plan_account: PlanAccount) -> PlanAccountAllocation:
     """Convert a Django PlanAccount model to a domain PlanAccountAllocation object."""
-    buckets = plan_account.buckets.all()
+    buckets = plan_account.buckets.all().order_by("created_at")
     account = plan_account.account
 
-    domain_account = to_domain_account(account, plan_account, buckets)
-    return PlanAccountAllocation(account=domain_account)
+    domain_account = to_domain_plan_account(account, plan_account, buckets)
+    return PlanAccountAllocation(account=domain_account, name=account.name)
 
 
 def to_domain_money_plan(plan: MoneyPlan) -> DomainMoneyPlan:
@@ -58,7 +143,9 @@ def to_domain_money_plan(plan: MoneyPlan) -> DomainMoneyPlan:
     # Convert accounts and buckets
     accounts = {}
 
-    for plan_account in plan.plan_accounts.all().select_related("account").prefetch_related("buckets"):
+    for plan_account in (
+        plan.plan_accounts.all().order_by("created_at").select_related("account").prefetch_related("buckets")
+    ):
         account_id = plan_account.account.id
         accounts[account_id] = to_domain_plan_account_allocation(plan_account)
 
@@ -193,44 +280,36 @@ class MoneyPlanRepository:
 
         # Process accounts in domain model
         for account_id, allocation in domain_plan.accounts.items():
-            domain_account = allocation.account
+            domain_plan_account = allocation.account
 
             # Find or create account and plan_account
             if account_id in existing_plan_accounts:
                 # Update existing plan account
                 plan_account = existing_plan_accounts[account_id]
-                plan_account.is_checked = domain_account.is_checked
-                plan_account.notes = domain_account.notes
+                plan_account.is_checked = domain_plan_account.is_checked
+                plan_account.notes = domain_plan_account.notes
                 plan_account.save()
             else:
-                # Create account if needed
-                try:
-                    account = Account.objects.get(id=domain_account.account_id)
-                except Account.DoesNotExist:
-                    account = Account(
-                        id=domain_account.account_id,
-                        name=domain_account.name,
-                        user_account=self._user_account,
-                    )
-                    account.save()
+                account = Account.objects.get(id=account_id)
 
                 # Create plan account
                 plan_account = PlanAccount(
                     plan=orm_plan,
                     account=account,
                     user_account=self._user_account,
-                    is_checked=domain_account.is_checked,
-                    notes=domain_account.notes,
+                    is_checked=domain_plan_account.is_checked,
+                    notes=domain_plan_account.notes,
                 )
                 plan_account.save()
 
             # Process buckets for this account
-            self._sync_buckets(domain_account, plan_account)
+            self._sync_buckets(domain_plan_account, plan_account)
 
         # Remove plan accounts that are no longer in the domain model
         domain_account_ids = set(domain_plan.accounts.keys())
         for account_id, plan_account in existing_plan_accounts.items():
             if account_id not in domain_account_ids:
+                # Delete the plan account
                 plan_account.delete()  # This will cascade and delete associated buckets
 
     def _sync_buckets(self, domain_account: DomainAccount, plan_account: PlanAccount) -> None:
@@ -257,7 +336,7 @@ class MoneyPlanRepository:
                 bucket = Bucket(
                     plan_account=plan_account,
                     user_account=self._user_account,
-                    name=domain_bucket.bucket_name,
+                    name=domain_bucket.name,
                     category=domain_bucket.category,
                     allocated_amount=domain_bucket.allocated_amount.as_decimal,
                 )

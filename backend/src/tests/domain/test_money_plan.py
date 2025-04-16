@@ -5,10 +5,13 @@ import pytest
 from amoneyplan.common.models import generate_safe_cuid16
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import (
+    AccountAllocationConfig,
     AccountNotFoundError,
     AccountStateMatchError,
+    BucketConfig,
     MoneyPlan,
     MoneyPlanError,
+    PlanAccount,
     PlanAlreadyCommittedError,
 )
 
@@ -38,57 +41,26 @@ def test_money_plan_create(money_plan, the_date):
     assert not money_plan.committed
 
 
-def test_account_default_bucket():
-    """Test that an account gets a default bucket when created without buckets."""
-    now = datetime.now(timezone.utc)
-    today = date.today()
-    plan = MoneyPlan.start_plan(
-        id=generate_safe_cuid16(), initial_balance=1000, created_at=now, plan_date=today
-    )
-
-    # Add account without specifying buckets
-    new_account_id = generate_safe_cuid16()
-    plan.add_account(new_account_id, name="Test Account")
-
-    # Get the account from the plan
-    account = plan.accounts[new_account_id].account
-
-    # Verify default bucket was created
-    assert len(account.buckets) == 1
-    default_bucket = account.buckets.get("Default")
-    assert default_bucket is not None
-    assert default_bucket.bucket_name == "Default"
+def test_plan_account_default_bucket():
+    """Test that an account gets a default bucket if none are provided."""
+    plan_account = PlanAccount.create("1")
+    assert len(plan_account.buckets) == 1
+    default_bucket = next(iter(plan_account.buckets.values()))
+    assert default_bucket.name == "Default"
     assert default_bucket.category == "default"
-    assert default_bucket.allocated_amount.as_float == 0
+    assert default_bucket.allocated_amount == Money(0)
 
 
-def test_account_no_default_bucket_when_buckets_provided():
-    """Test that an account doesn't get a default bucket when buckets are provided."""
-    now = datetime.now(timezone.utc)
-    today = date.today()
-    plan = MoneyPlan.start_plan(
-        id=generate_safe_cuid16(), initial_balance=1000, created_at=now, plan_date=today
-    )
-
-    # Add account with buckets
-    plan.add_account(
-        generate_safe_cuid16(),
-        name="Test Account",
-        buckets=[
-            {"bucket_name": "Savings", "category": "savings", "allocated_amount": 500},
-            {"bucket_name": "Bills", "category": "expenses", "allocated_amount": 500},
-        ],
-    )
-
-    # Get the account from the plan
-    account_id = list(plan.accounts.keys())[0]
-    account = plan.accounts[account_id].account
-
-    # Verify only provided buckets exist (no default bucket)
-    assert len(account.buckets) == 2
-    assert "Default" not in account.buckets
-    assert "Savings" in account.buckets
-    assert "Bills" in account.buckets
+def test_plan_account_no_default_bucket_when_buckets_provided():
+    """Test that an account doesn't get a default bucket if buckets are provided."""
+    buckets = [
+        {"name": "Savings", "category": "savings", "allocated_amount": 500},
+        {"name": "Bills", "category": "expenses", "allocated_amount": 500},
+    ]
+    plan_account = PlanAccount.create("1", buckets=buckets)
+    assert len(plan_account.buckets) == 2
+    assert "Savings" in plan_account.buckets
+    assert "Bills" in plan_account.buckets
 
 
 def test_archive_uncommitted_plan(money_plan):
@@ -106,31 +78,38 @@ def test_archive_uncommitted_plan(money_plan):
 
 
 def test_archive_committed_plan():
-    """Test archiving a committed money plan."""
-    # Create a plan with some funds and accounts
-    now = datetime.now(timezone.utc)
-    today = date.today()
+    """Test that a committed plan can be archived."""
+    # Create a plan with one account and bucket
     plan = MoneyPlan.start_plan(
-        id=generate_safe_cuid16(), initial_balance=1000, created_at=now, plan_date=today
-    )
-
-    # Add an account with a bucket to make the plan committable
-    plan.add_account(
-        generate_safe_cuid16(),
-        name="Test Account",
-        buckets=[{"bucket_name": "Savings", "category": "savings", "allocated_amount": 1000}],
+        id="1",
+        initial_balance=1000,
+        created_at=datetime.now(timezone.utc),
+        plan_date=date.today(),
+        default_allocations=[
+            AccountAllocationConfig(
+                "1",
+                "Test Account",
+                buckets=[
+                    BucketConfig(
+                        name="Savings",
+                        category="savings",
+                        allocated_amount=Money(1000),
+                    )
+                ],
+            )
+        ],
     )
 
     # Commit the plan
     plan.commit()
-    assert plan.committed
 
     # Archive the plan
+    now = datetime.now(timezone.utc)
     plan.archive_plan(now)
 
     # Verify the plan is archived
     assert plan.is_archived
-    assert plan.archived_at is not None
+    assert plan.archived_at == now
 
 
 def test_archive_already_archived_plan(money_plan):
@@ -153,67 +132,89 @@ def test_cannot_modify_archived_plan(money_plan):
 
     # Attempts to modify should raise errors
     with pytest.raises(MoneyPlanError, match="Cannot modify an archived plan"):
-        money_plan.add_account(generate_safe_cuid16(), name="New Account")
+        money_plan.add_account(generate_safe_cuid16(), "New Account")
 
     with pytest.raises(MoneyPlanError, match="Cannot modify an archived plan"):
         money_plan.adjust_plan_balance(adjustment=100)
 
 
 def test_remove_account():
-    """Test removing an account from a draft plan."""
-    now = datetime.now(timezone.utc)
-    today = date.today()
+    """Test removing an account from a plan."""
+    # Create a plan with two accounts
     plan = MoneyPlan.start_plan(
-        id=generate_safe_cuid16(), initial_balance=1000, created_at=now, plan_date=today
-    )
-
-    # Add account with some funds allocated
-    account_id = generate_safe_cuid16()
-    plan.add_account(
-        account_id,
-        name="Test Account",
-        buckets=[
-            {"bucket_name": "Savings", "category": "savings", "allocated_amount": 500},
-            {"bucket_name": "Bills", "category": "expenses", "allocated_amount": 300},
+        id="1",
+        initial_balance=1000,
+        created_at=datetime.now(timezone.utc),
+        plan_date=date.today(),
+        default_allocations=[
+            AccountAllocationConfig(
+                "1",
+                "Account 1",
+                buckets=[
+                    BucketConfig(
+                        name="Savings",
+                        category="savings",
+                        allocated_amount=Money(500),
+                    ),
+                    BucketConfig(
+                        name="Bills",
+                        category="expenses",
+                        allocated_amount=Money(300),
+                    ),
+                ],
+            ),
+            AccountAllocationConfig(
+                "2",
+                "Account 2",
+                buckets=[
+                    BucketConfig(
+                        name="Default",
+                        category="default",
+                        allocated_amount=Money(200),
+                    ),
+                ],
+            ),
         ],
     )
 
-    # Verify initial state
+    # Remove the first account
+    plan.remove_account("1")
+
+    # Check that the account was removed
+    assert "1" not in plan.accounts
     assert len(plan.accounts) == 1
-    assert plan.remaining_balance.as_float == 200  # 1000 - 500 - 300
-    assert account_id in plan.accounts
-
-    # Remove the account
-    plan.remove_account(account_id)
-
-    # Verify account was removed and funds were returned
-    assert len(plan.accounts) == 0
-    assert account_id not in plan.accounts
-    assert plan.remaining_balance.as_float == 1000  # All funds returned
+    assert plan.remaining_balance == Money(800)  # Initial - Account 2's allocation
 
 
 def test_cannot_remove_account_from_committed_plan():
-    """Test that we cannot remove accounts from committed plans."""
-    now = datetime.now(timezone.utc)
-    today = date.today()
+    """Test that an account cannot be removed from a committed plan."""
+    # Create a plan with one account
     plan = MoneyPlan.start_plan(
-        id=generate_safe_cuid16(), initial_balance=1000, created_at=now, plan_date=today
-    )
-
-    # Add account with all funds allocated
-    account_id = generate_safe_cuid16()
-    plan.add_account(
-        account_id,
-        name="Test Account",
-        buckets=[{"bucket_name": "Savings", "category": "savings", "allocated_amount": 1000}],
+        id="1",
+        initial_balance=1000,
+        created_at=datetime.now(timezone.utc),
+        plan_date=date.today(),
+        default_allocations=[
+            AccountAllocationConfig(
+                "1",
+                "Test Account",
+                buckets=[
+                    BucketConfig(
+                        name="Savings",
+                        category="savings",
+                        allocated_amount=Money(1000),
+                    ),
+                ],
+            )
+        ],
     )
 
     # Commit the plan
     plan.commit()
 
-    # Try to remove the account - should raise error
-    with pytest.raises(PlanAlreadyCommittedError, match="Cannot remove an account from a committed plan"):
-        plan.remove_account(account_id)
+    # Try to remove the account
+    with pytest.raises(PlanAlreadyCommittedError):
+        plan.remove_account("1")
 
 
 def test_cannot_remove_nonexistent_account():
@@ -240,7 +241,7 @@ def test_set_account_checked_state():
 
     # Add account
     account_id = generate_safe_cuid16()
-    plan.add_account(account_id, name="Test Account")
+    plan.add_account(account_id, "Test Account")
 
     # Verify initial state
     assert not plan.accounts[account_id].account.is_checked
@@ -273,7 +274,7 @@ def test_edit_plan_notes(money_plan):
 def test_edit_account_notes(money_plan):
     """Test editing the notes of an account."""
     account_id = generate_safe_cuid16()
-    money_plan.add_account(account_id, name="Test Account")
+    money_plan.add_account(account_id, "Test Account")
     money_plan.edit_account_notes(account_id, "New account notes")
     account = money_plan.accounts[account_id].account
     assert account.notes == "New account notes"

@@ -20,3 +20,4 @@ infra_dev/terraform/amoneyplan-config
 
 # Sandbox
 a_sandbox/
+old_*

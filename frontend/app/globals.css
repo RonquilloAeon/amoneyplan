@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix for transparent dropdown and select menus */
+.SelectContent,
+.DropdownMenuContent,
+.SelectViewport,
+.select-dropdown,
+.select-content,
+[data-radix-popper-content-wrapper] {
+  @apply bg-white border border-border rounded-md shadow-lg !important;
+  background-color: white !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dark .SelectContent,
+.dark .DropdownMenuContent,
+.dark .SelectViewport,
+.dark .select-dropdown,
+.dark .select-content,
+.dark [data-radix-popper-content-wrapper] {
+  @apply bg-gray-800 border-gray-700 text-white !important;
+  background-color: hsl(var(--popover)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Specific select item styles */
+.SelectItem,
+.DropdownMenuItem,
+.select-item {
+  background-color: transparent;
+}
+
+.SelectItem[data-highlighted],
+.DropdownMenuItem[data-highlighted],
+.select-item[data-highlighted],
+.select-item:hover,
+.SelectItem:hover,
+.DropdownMenuItem:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+/* Specific SelectContent styles */
+.select__content {
+  @apply bg-white dark:bg-slate-950 border overflow-hidden;
+}
+
+/* SelectItem hover state */
+.select__item[data-highlighted] {
+  @apply bg-slate-100 dark:bg-slate-800;
+}
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+    width: 8px; /* Width of the scrollbar */
+}
+
+::-webkit-scrollbar-track {
+    background: hsl(var(--secondary)); /* Color of the tracking area */
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary)); /* Color of the scroll thumb */
+    border-radius: 10px; /* Roundness of the scroll thumb */
+    border: 2px solid hsl(var(--secondary)); /* Creates padding around scroll thumb */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--primary) / 0.8); /* Color of the scroll thumb on hover */
+}
+
+
+/* Ensure Radix Primitives portal elements are top-most */
+[data-radix-portal] {
+  z-index: 1000 !important; /* Adjust if needed, ensure it's higher than other elements */
+} 

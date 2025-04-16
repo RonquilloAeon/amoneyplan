@@ -28,7 +28,7 @@ class JWTAuthenticationMiddleware:
             try:
                 token = auth_header.split(" ")[1]
                 logger.info(f"Processing token: {token[:10]}...")
-                logger.info(f"Using SECRET_KEY: {settings.SECRET_KEY[:10]}...")
+                logger.info("Using SECRET_KEY for token decoding.")
                 logger.info(f"Using JWT_ALGORITHM: {settings.JWT_ALGORITHM}")
 
                 payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])

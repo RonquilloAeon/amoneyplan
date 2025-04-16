@@ -19,7 +19,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+    firstName?: string,
+    lastName?: string
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -89,15 +95,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Register function
-  const register = async (data: RegisterData) => {
+  const register = async (
+    username: string,
+    email: string,
+    password: string,
+    firstName?: string,
+    lastName?: string
+  ) => {
     try {
+      // Construct the data object from arguments
+      const data: RegisterData = { username, email, password, firstName, lastName };
+
       // Use your API to register the user
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch('/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(data), // Now stringifies the correctly constructed object
       });
 
       const responseData = await response.json();
@@ -107,16 +122,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await login(data.username, data.password);
         return { success: true };
       } else {
-        return { 
-          success: false, 
-          error: responseData.error || 'Registration failed' 
+        return {
+          success: false,
+          error: responseData.error || 'Registration failed'
         };
       }
     } catch (error) {
       console.error('Registration error:', error);
-      return { 
+      return {
         success: false,
-        error: (error as Error).message || 'An unexpected error occurred' 
+        error: (error as Error).message || 'An unexpected error occurred'
       };
     }
   };

@@ -93,27 +93,26 @@ export default function PlansListPage() {
   const [setAccountCheckedState] = useMutation(SET_ACCOUNT_CHECKED_STATE, {
     onCompleted: (data) => {
       console.log("Mutation completed:", data);
-      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
-        const successData = data.moneyPlan.setAccountCheckedState.data;
-        console.log("Success response data:", successData);
-        console.log("Updated accounts:", successData.accounts.map(acc => ({
-          planAccountId: acc.id,
-          isChecked: acc.isChecked,
-          name: acc.account.name
-        })));
-        
+      // Check the actual typename returned by your backend mutation (e.g., 'Success', 'EmptySuccess')
+      const result = data?.moneyPlan?.setAccountCheckedState;
+
+      if (result?.__typename?.includes('Success')) { // Check if typename indicates success
+        const message = result.message;
+        console.log("Success response message:", message);
+
         toast({
           title: 'Success',
-          description: data.moneyPlan.setAccountCheckedState.message,
+          description: message || 'Account state updated.', // Use message from response
         });
         console.log("Refetching plans data after successful update");
-        refetch();
-      } else if (data?.moneyPlan?.setAccountCheckedState.__typename === 'ApplicationError') {
-        console.error("Mutation error:", data.moneyPlan.setAccountCheckedState.message);
+        refetch(); // Refetch to get confirmed data
+      } else if (result?.__typename === 'ApplicationError') {
+        const errorMessage = result.message;
+        console.error("Mutation error:", errorMessage);
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: data.moneyPlan.setAccountCheckedState.message,
+          description: errorMessage,
         });
       }
       setCheckingAccount(null);
@@ -127,81 +126,57 @@ export default function PlansListPage() {
       });
       setCheckingAccount(null);
     },
-    update: (cache, { data }) => {
-      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
-        // The backend returns the updated plan, but the cache holds multiple plans,
-        // so we need to update the specific plan and account that was changed
-        try {
-          const updatedPlan = data.moneyPlan.setAccountCheckedState.data;
-          const currentPlansData = cache.readQuery({
-            query: GET_PLANS,
-            variables: pagination.variables
-          }) as any; // Use any temporarily to bypass TypeScript constraints
-          
-          if (currentPlansData?.moneyPlans) {
-            console.log("Updating cache with new checked state");
-            // Create a new copy of the plans data with the updated account
-            const updatedEdges = currentPlansData.moneyPlans.edges.map(edge => {
-              if (edge.node.id === updatedPlan.id) {
-                // This is the plan that was updated
-                console.log("Found plan to update in cache:", edge.node.id);
-                return {
-                  ...edge,
-                  node: {
-                    ...edge.node,
-                    accounts: updatedPlan.accounts
-                  }
-                };
-              }
-              return edge;
-            });
-            
-            // Write back the updated query result
-            cache.writeQuery({
-              query: GET_PLANS,
-              variables: pagination.variables,
-              data: {
-                moneyPlans: {
-                  ...currentPlansData.moneyPlans,
-                  edges: updatedEdges
-                }
-              }
-            });
-          }
-        } catch (err) {
-          console.error("Error updating cache:", err);
-        }
-      }
-    }
   });
 
-  const handleToggleChecked = async (planId: string, accountId: string, currentCheckedState: boolean) => {
+  const handleToggleChecked = async (planId: string, planAccountId: string, underlyingAccountId: string, currentCheckedState: boolean) => {
     console.log("Toggle checked for plan:", planId);
-    console.log("Toggle checked for PlanAccount ID:", accountId);
+    console.log("Toggle checked for PlanAccount ID:", planAccountId);
+    console.log("Toggle checked for Underlying Account ID:", underlyingAccountId);
     console.log("Current checked state:", currentCheckedState);
     
-    setCheckingAccount({ planId, accountId });
+    // Use planAccountId for UI disabling state, but underlyingAccountId for the mutation
+    setCheckingAccount({ planId, accountId: planAccountId });
     
-    // Create optimistic response to provide immediate feedback
     const newState = !currentCheckedState;
     
+    // Find the current plan and account data for optimistic update
+    const currentPlan = data?.moneyPlans?.edges.find(edge => edge.node.id === planId)?.node;
+    const currentAccount = currentPlan?.accounts.find(a => a.id === planAccountId);
+    
+    // Prepare optimistic accounts data
+    const optimisticAccounts = currentPlan?.accounts.map(acc => {
+        if (acc.id === planAccountId) {
+            return {
+                ...acc,
+                isChecked: newState, // Optimistically update the checked state
+                __typename: "PlanAccount" // Ensure typename is provided
+            };
+        }
+        return { ...acc, __typename: "PlanAccount"}; // Ensure typename for others
+    }) || [];
+    
+    // Ensure nested account and buckets also have typenames if needed by cache
+    optimisticAccounts.forEach(acc => {
+      acc.account = { ...acc.account, __typename: "Account" };
+      acc.buckets = acc.buckets.map(b => ({ ...b, __typename: "Bucket" }));
+    });
+
     try {
       await setAccountCheckedState({
         variables: {
           planId,
-          accountId,
+          accountId: underlyingAccountId, // Pass underlying account ID
           isChecked: newState
         },
+        // Optimistic response structure now reflects the simpler backend return
         optimisticResponse: {
           moneyPlan: {
+            __typename: "MoneyPlanMutations",
             setAccountCheckedState: {
-              __typename: "Success",
-              message: `Account ${newState ? 'checked' : 'unchecked'} successfully.`,
-              data: {
-                // We'll ignore this data since we're doing an immediate refetch anyway
-                id: planId,
-                accounts: []
-              }
+              // Adjust __typename if your backend uses 'Success' with only a message, etc.
+              __typename: "EmptySuccess", // Assuming backend returns EmptySuccess type now
+              message: `Account ${newState ? 'checked' : 'unchecked'} optimistically.`, // Optimistic message
+              // No 'data' field if using EmptySuccess
             }
           }
         }
@@ -310,13 +285,15 @@ export default function PlansListPage() {
                                     checked={account.isChecked}
                                     disabled={
                                       plan.isArchived || 
+                                      // Disable based on PlanAccount ID
                                       (checkingAccount?.planId === plan.id && checkingAccount?.accountId === account.id)
                                     }
                                     onCheckedChange={() => {
                                       console.log(`Checkbox clicked for PlanAccount [${account.id}]`);
                                       console.log(`Current isChecked state: ${account.isChecked}`);
                                       console.log(`Parent Plan ID: ${plan.id}`);
-                                      handleToggleChecked(plan.id, account.id, account.isChecked);
+                                      // Pass PlanAccount ID, Underlying Account ID, and current state
+                                      handleToggleChecked(plan.id, account.id, account.account.id, account.isChecked);
                                     }}
                                     className="data-[state=checked]:bg-green-500 data-[state=checked]:text-white"
                                   />

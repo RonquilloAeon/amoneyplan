@@ -54,31 +54,31 @@ export default function PlanDetailsPage() {
     skip: !session || !planId,
   });
   
+  const plan: Plan = data?.moneyPlan;
+  
   const [archivePlanMutation] = useMutation(ARCHIVE_PLAN);
   
   const [setAccountCheckedState] = useMutation(SET_ACCOUNT_CHECKED_STATE, {
     onCompleted: (data) => {
       console.log("Detail page mutation completed:", data);
-      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
-        const successData = data.moneyPlan.setAccountCheckedState.data;
-        console.log("Success response data:", successData);
-        console.log("Updated accounts:", successData.accounts.map(acc => ({
-          planAccountId: acc.id,
-          isChecked: acc.isChecked,
-          name: acc.account.name
-        })));
+      const result = data?.moneyPlan?.setAccountCheckedState;
+
+      if (result?.__typename?.includes('Success')) {
+        const message = result.message;
+        console.log("Success response message:", message);
         
         toast({
           title: 'Success',
-          description: data.moneyPlan.setAccountCheckedState.message,
+          description: message || 'Account state updated.',
         });
         refetch();
-      } else if (data?.moneyPlan?.setAccountCheckedState.__typename === 'ApplicationError') {
-        console.error("Mutation error:", data.moneyPlan.setAccountCheckedState.message);
+      } else if (result?.__typename === 'ApplicationError') {
+        const errorMessage = result.message;
+        console.error("Mutation error:", errorMessage);
         toast({
           variant: 'destructive',
           title: 'Error',
-          description: data.moneyPlan.setAccountCheckedState.message,
+          description: errorMessage,
         });
       }
       setCheckingAccount(null);
@@ -91,56 +91,47 @@ export default function PlanDetailsPage() {
       });
       setCheckingAccount(null);
     },
-    update: (cache, { data }) => {
-      if (data?.moneyPlan?.setAccountCheckedState.__typename === 'Success') {
-        try {
-          const updatedPlan = data.moneyPlan.setAccountCheckedState.data;
-          
-          // Update the individual plan query in the cache
-          cache.writeQuery({
-            query: GET_PLAN,
-            variables: { id: planId },
-            data: {
-              moneyPlan: updatedPlan
-            }
-          });
-          
-          console.log("Updated plan cache with new account state");
-        } catch (err) {
-          console.error("Error updating cache:", err);
-        }
-      }
-    }
   });
   
-  const handleToggleChecked = async (accountId: string, currentCheckedState: boolean) => {
+  const handleToggleChecked = async (planAccountId: string, underlyingAccountId: string, currentCheckedState: boolean) => {
     if (!planId) return;
     
-    console.log("Toggle checked for PlanAccount ID:", accountId);
+    console.log("Toggle checked for PlanAccount ID:", planAccountId);
+    console.log("Toggle checked for Underlying Account ID:", underlyingAccountId);
     console.log("Current checked state:", currentCheckedState);
     
-    setCheckingAccount(accountId);
+    setCheckingAccount(planAccountId);
     
-    // Create optimistic response to provide immediate feedback
     const newState = !currentCheckedState;
     
+    const optimisticAccounts = plan?.accounts.map(acc => {
+        if (acc.id === planAccountId) {
+            return {
+                ...acc,
+                isChecked: newState, 
+                __typename: "PlanAccount"
+            };
+        }
+        return { ...acc, __typename: "PlanAccount"};
+    }) || [];
+    
+    optimisticAccounts.forEach(acc => {
+      acc.buckets = acc.buckets.map(b => ({ ...b, __typename: "Bucket" }));
+    });
+
     try {
       await setAccountCheckedState({
         variables: {
           planId,
-          accountId: accountId,
+          accountId: underlyingAccountId,
           isChecked: newState
         },
         optimisticResponse: {
           moneyPlan: {
+            __typename: "MoneyPlanMutations", 
             setAccountCheckedState: {
-              __typename: "Success",
-              message: `Account ${newState ? 'checked' : 'unchecked'} successfully.`,
-              data: {
-                // We'll ignore this data since we're doing an immediate refetch anyway
-                id: planId,
-                accounts: []
-              }
+              __typename: "EmptySuccess",
+              message: `Account ${newState ? 'checked' : 'unchecked'} optimistically.`,
             }
           }
         }
@@ -149,8 +140,6 @@ export default function PlanDetailsPage() {
       // Error is handled in the onError callback
     }
   };
-  
-  const plan: Plan = data?.moneyPlan;
   
   const handleArchivePlan = async () => {
     if (!planId) return;
@@ -361,7 +350,7 @@ export default function PlanDetailsPage() {
                               console.log(`Detail page: Checkbox clicked for PlanAccount [${account.id}]`);
                               console.log(`Current isChecked state: ${account.isChecked}`);
                               console.log(`Plan ID: ${planId}`);
-                              handleToggleChecked(account.id, account.isChecked);
+                              handleToggleChecked(account.id, account.account.id, account.isChecked);
                             }}
                             className="data-[state=checked]:bg-green-500 data-[state=checked]:text-white"
                           />

@@ -238,6 +238,7 @@ export function usePlans() {
       }
       
       await refetchPlansQuery();
+      await refetchDraftQuery();
       
       toast({
         title: "Success",
@@ -286,10 +287,19 @@ export function usePlans() {
     }
   };
 
-  const updatePlanAccount = async (planId: string, accountId: string, buckets: BucketConfigInput[]) => {
+  const updatePlanAccount = async (planId: string, planAccountId: string, buckets: BucketConfigInput[]) => {
     try {
+      // Find the account within the draft plan to get the actual account ID
+      const accountToUpdate = draftPlan?.accounts?.find(acc => acc.id === planAccountId);
+      
+      if (!accountToUpdate) {
+        throw new Error("Account not found in the current draft plan.");
+      }
+      
+      const actualAccountId = accountToUpdate.account.id; // Get the correct account ID
+      
       const { data } = await updatePlanAccountMutation({
-        variables: { planId, accountId, buckets }
+        variables: { planId, accountId: actualAccountId, buckets } // Use the correct account ID here
       });
       
       if (data?.moneyPlan?.changeAccountConfiguration.__typename === 'ApplicationError') {
@@ -313,10 +323,19 @@ export function usePlans() {
     }
   };
 
-  const removeAccountFromPlan = async (planId: string, accountId: string) => {
+  const removeAccountFromPlan = async (planId: string, planAccountId: string) => {
     try {
+      // Find the account within the draft plan to get the actual account ID
+      const accountToRemove = draftPlan?.accounts?.find(acc => acc.id === planAccountId);
+      
+      if (!accountToRemove) {
+        throw new Error("Account not found in the current draft plan.");
+      }
+      
+      const actualAccountId = accountToRemove.account.id; // Get the correct account ID
+      
       const { data } = await removeAccountFromPlanMutation({
-        variables: { planId, accountId }
+        variables: { planId, accountId: actualAccountId } // Use the correct account ID here
       });
       
       if (data?.moneyPlan?.removeAccount.__typename === 'ApplicationError') {

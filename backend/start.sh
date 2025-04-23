@@ -9,4 +9,4 @@ python src/manage.py collectstatic --no-input
 python src/manage.py migrate
 
 # Start Uvicorn using exec
-exec uvicorn src.amoneyplan.asgi:application --host 0.0.0.0 --port "${PORT:-8000}"
+exec uvicorn src.amoneyplan.asgi:application --host 0.0.0.0 --port "${PORT:-10000}"

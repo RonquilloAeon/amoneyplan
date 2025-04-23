@@ -26,15 +26,15 @@ RUN useradd --create-home appuser
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Expose the port the app runs on
-EXPOSE 8000
-
 #
 # Dev stage
 #
 FROM base AS dev
 
 COPY --from=base / /
+
+# Expose the port the app runs on
+EXPOSE 8000
 
 # Run the application
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
@@ -47,6 +47,9 @@ COPY --from=base / /
 
 # Copy the build script
 COPY start.sh /app/start.sh
+
+# Expose the port the app runs on
+EXPOSE 10000
 
 ENV DJANGO_SETTINGS_MODULE=src.amoneyplan.settings
 ENTRYPOINT ["/app/start.sh"]

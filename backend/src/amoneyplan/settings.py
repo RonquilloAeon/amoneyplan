@@ -9,12 +9,19 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
-SECRET_KEY = "django-insecure-change-this-in-production"
+# SECRET_KEY: Read from environment variable, use insecure default only for dev
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-this-in-production")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Set DEBUG to False if the DEBUG environment variable is set to 'False', otherwise default to True
+DEBUG = os.environ.get("DEBUG", "True").lower() != "false"
 
-ALLOWED_HOSTS = ["*"]  # Allow all hosts in development
+if DEBUG:
+    ALLOWED_HOSTS = ["*"]  # Allow all hosts in development
+else:
+    ALLOWED_HOSTS = [
+        "my.fortana.app",
+    ]
 
 # Application definition
 INSTALLED_APPS = [
@@ -155,9 +162,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",  # Alternative Vite port
     "http://127.0.0.1:8000",
+    "https://my.fortana.app",
 ]
 
-FRONTEND_URL = "http://localhost:5173"  # Development frontend URL
+FRONTEND_URL = "http://localhost:5173" if DEBUG else "https://my.fortana.app"
 
 # Session settings
 SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "Strict"
@@ -165,7 +173,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 
 # CSRF settings
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
+CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000", "https://my.fortana.app"]
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
@@ -184,7 +192,8 @@ AUTHENTICATION_BACKENDS = [
 SITE_ID = 1
 ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
-ACCOUNT_EMAIL_VERIFICATION = "none"  # TODO Change to "mandatory" in production
+# ACCOUNT_EMAIL_VERIFICATION: Read from env var, default to 'none' for dev, 'mandatory' for prod implied
+ACCOUNT_EMAIL_VERIFICATION = "none" if DEBUG else "mandatory"
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {

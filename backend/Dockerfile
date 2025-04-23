@@ -43,7 +43,7 @@ FROM base AS prod
 COPY --from=base / /
 
 # Copy the build script
-COPY start.sh /app/src/start.sh
+COPY start.sh /app/start.sh
 
-WORKDIR /app/src
-ENTRYPOINT ["start.sh"]
+ENV DJANGO_SETTINGS_MODULE=src.amoneyplan.settings
+ENTRYPOINT ["/app/start.sh"]

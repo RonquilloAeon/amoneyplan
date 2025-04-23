@@ -45,4 +45,5 @@ COPY --from=base / /
 # Copy the build script
 COPY start.sh /app/start.sh
 
-ENTRYPOINT ["/app/start.sh"]
+WORKDIR /app/src
+ENTRYPOINT ["start.sh"]

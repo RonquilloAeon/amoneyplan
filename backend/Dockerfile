@@ -40,7 +40,7 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 # Prod stage
 #
 FROM base AS prod
-ENV PYTHONPATH /app/src # Ensure PYTHONPATH is also set in the prod stage
+ENV PYTHONPATH /app/src
 COPY --from=base / /
 
 # Copy the build script

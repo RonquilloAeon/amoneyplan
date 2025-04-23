@@ -21,6 +21,9 @@ if DEBUG:
 else:
     ALLOWED_HOSTS = [
         "my.fortana.app",
+        "amoneyplan.onrender.com",
+        "services.fortana.app",
+        "amoneyplan-bxoe.onrender.com",
     ]
 
 # Application definition
@@ -165,6 +168,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",  # Alternative Vite port
     "http://127.0.0.1:8000",
+    "https://amoneyplan.onrender.com",
     "https://my.fortana.app",
 ]
 

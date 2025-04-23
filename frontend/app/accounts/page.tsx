@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { PlusIcon } from 'lucide-react';
 import { PaginationControls } from '@/components/PaginationControls';
 
-export default function AccountsPage() {
+// Renamed original component to avoid naming conflict
+function AccountsPageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { 
@@ -32,7 +33,7 @@ export default function AccountsPage() {
   }, [status, router]);
 
   if (status === 'loading') {
-    return <div className="flex justify-center py-8">Loading...</div>;
+    return <div className="flex justify-center py-8">Loading session...</div>;
   }
 
   if (error) {
@@ -78,18 +79,27 @@ export default function AccountsPage() {
             ))}
           </div>
 
-          <Suspense fallback={<div>Loading pagination...</div>}>
-            <PaginationControls
-              currentPage={currentPage}
-              totalPages={totalPages}
-              goToNextPage={goToNextPage}
-              goToPreviousPage={goToPreviousPage}
-              goToPage={goToPage}
-              className="mt-4"
-            />
-          </Suspense>
+          {/* PaginationControls might still need Suspense if it uses useSearchParams *directly* */}
+          {/* but the main cause is useAccountsPaginated, which is now inside Suspense */}
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            goToNextPage={goToNextPage}
+            goToPreviousPage={goToPreviousPage}
+            goToPage={goToPage}
+            className="mt-4"
+          />
         </>
       )}
     </div>
+  );
+}
+
+// Default export now wraps the main content component in Suspense
+export default function AccountsPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-8">Loading accounts page...</div>}>
+      <AccountsPageContent />
+    </Suspense>
   );
 } 

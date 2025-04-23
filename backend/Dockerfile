@@ -2,6 +2,9 @@ FROM python:3.13-slim AS base
 
 WORKDIR /app
 
+# Set PYTHONPATH so Python knows where to find the 'src' modules
+ENV PYTHONPATH /app
+
 # Install Poetry
 RUN pip install --no-cache-dir poetry==2.1.1
 

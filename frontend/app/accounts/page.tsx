@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useAccountsPaginated } from '@/lib/hooks/useAccountsPaginated';
@@ -78,14 +78,16 @@ export default function AccountsPage() {
             ))}
           </div>
 
-          <PaginationControls
-            currentPage={currentPage}
-            totalPages={totalPages}
-            goToNextPage={goToNextPage}
-            goToPreviousPage={goToPreviousPage}
-            goToPage={goToPage}
-            className="mt-4"
-          />
+          <Suspense fallback={<div>Loading pagination...</div>}>
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              goToNextPage={goToNextPage}
+              goToPreviousPage={goToPreviousPage}
+              goToPage={goToPage}
+              className="mt-4"
+            />
+          </Suspense>
         </>
       )}
     </div>

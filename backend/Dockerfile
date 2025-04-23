@@ -42,4 +42,7 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 FROM base AS prod
 COPY --from=base / /
 
-ENTRYPOINT ["uvicorn"]
+# Copy the build script
+COPY start.sh /app/start.sh
+
+ENTRYPOINT ["/app/start.sh"]

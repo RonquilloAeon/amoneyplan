@@ -247,7 +247,7 @@ export default function PlansListPage() {
               <Card key={plan.id} className="shadow-sm hover:shadow-md transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle className="text-xl">{formatDate(plan.createdAt)}</CardTitle>
+                    <CardTitle className="text-xl">{formatDate(plan.planDate)}</CardTitle>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant={plan.isCommitted ? "default" : "outline"} className={plan.isCommitted ? "bg-green-500 hover:bg-green-600" : ""}>

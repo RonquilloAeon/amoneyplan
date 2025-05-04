@@ -67,6 +67,14 @@ export default function PlansPage() {
   const [isCommitting, setIsCommitting] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [localPlanNotes, setLocalPlanNotes] = useState('');
+
+  // Initialize local notes when draftPlan loads
+  useEffect(() => {
+    if (draftPlan) {
+      setLocalPlanNotes(draftPlan.notes || '');
+    }
+  }, [draftPlan]);
 
   // Refetch accounts and plans when the component mounts
   useEffect(() => {
@@ -87,6 +95,14 @@ export default function PlansPage() {
       await updatePlanNotes(draftPlan.id, notes);
     } catch (err) {
       console.error('Failed to update plan notes:', err);
+    }
+  };
+
+  // New blur handler
+  const handleBlurPlanNotes = () => {
+    // Only update if notes have changed compared to the last fetched state
+    if (localPlanNotes !== (draftPlan?.notes || '') && draftPlan) {
+      handleUpdatePlanNotes(localPlanNotes);
     }
   };
 
@@ -284,10 +300,11 @@ export default function PlansPage() {
           <div className="space-y-2 mt-6">
             <h3 className="font-semibold">Notes</h3>
             <Textarea 
-              value={draftPlan.notes || ''} 
+              value={localPlanNotes}
               placeholder="Add notes to your plan"
               className="text-foreground border-gray-300 focus:border-primary focus:ring-primary"
-              onChange={(e) => handleUpdatePlanNotes(e.target.value)}
+              onChange={(e) => setLocalPlanNotes(e.target.value)}
+              onBlur={handleBlurPlanNotes}
             />
           </div>
         </CardContent>

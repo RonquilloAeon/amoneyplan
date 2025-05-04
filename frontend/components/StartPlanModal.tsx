@@ -1,15 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useQuery } from '@apollo/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { usePlans } from '@/lib/hooks/usePlans';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePlans, Plan } from '@/lib/hooks/usePlans';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/lib/hooks/useToast';
+import { GET_PLANS } from '@/lib/graphql/operations';
+import { formatDate } from '@/lib/utils/format';
 
 export function StartPlanModal() {
   const { data: session } = useSession();
@@ -17,10 +21,32 @@ export function StartPlanModal() {
   const [initialBalance, setInitialBalance] = useState('');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState<Date>(new Date());
+  const [copyFromPlanId, setCopyFromPlanId] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const { createPlan, refetchDraft } = usePlans();
+
+  const { data: plansData, loading: plansLoading, error: plansError } = useQuery(GET_PLANS, {
+    variables: {
+      first: 10,
+      filter: { isArchived: false, status: 'committed' },
+    },
+    skip: !session || !open,
+    fetchPolicy: 'cache-and-network',
+  });
+
+  const recentPlans: Plan[] = plansData?.moneyPlans?.edges?.map((edge: { node: Plan }) => edge.node) || [];
+
+  useEffect(() => {
+    if (plansError) {
+      toast({
+        variant: "destructive",
+        title: "Error loading plans",
+        description: plansError.message,
+      });
+    }
+  }, [plansError, toast]);
 
   const handleSubmit = async () => {
     if (!initialBalance || parseFloat(initialBalance) <= 0) {
@@ -35,11 +61,15 @@ export function StartPlanModal() {
     setIsSubmitting(true);
 
     try {
-      const result = await createPlan({
+      const input = {
         initialBalance: parseFloat(initialBalance),
         notes: notes.trim() || undefined,
-        planDate: date.toISOString().split('T')[0]
-      });
+        planDate: date.toISOString().split('T')[0],
+        copyFrom: copyFromPlanId || undefined,
+      };
+      console.log("Creating plan with input:", input);
+      
+      const result = await createPlan(input);
 
       if (result) {
         toast({
@@ -51,9 +81,9 @@ export function StartPlanModal() {
         setInitialBalance('');
         setNotes('');
         setDate(new Date());
+        setCopyFromPlanId(undefined);
       }
     } catch (err) {
-      // Error is handled in the usePlans hook with toast
       console.error('Failed to create plan:', err);
     } finally {
       setIsSubmitting(false);
@@ -69,7 +99,7 @@ export function StartPlanModal() {
         <DialogHeader>
           <DialogTitle>Start New Money Plan</DialogTitle>
           <DialogDescription>
-            Start a fresh plan to allocate your finances.
+            Start a fresh plan or copy the structure from a previous one.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -98,11 +128,34 @@ export function StartPlanModal() {
               value={date.toISOString().split('T')[0]}
               onChange={(e) => {
                 if (e.target.value) {
-                  setDate(new Date(e.target.value));
+                  const [year, month, day] = e.target.value.split('-').map(Number);
+                  setDate(new Date(year, month - 1, day)); 
                 }
               }}
               disabled={isSubmitting}
             />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="copy-from" className="text-right">
+              Copy Structure
+            </Label>
+            <Select
+              value={copyFromPlanId}
+              onValueChange={(value) => setCopyFromPlanId(value === 'none' ? undefined : value)}
+              disabled={isSubmitting || plansLoading}
+            >
+              <SelectTrigger id="copy-from" className="col-span-3">
+                <SelectValue placeholder={plansLoading ? "Loading plans..." : "Start from scratch"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Start from scratch</SelectItem>
+                {recentPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    Plan from {formatDate(plan.planDate || plan.createdAt)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="notes" className="text-right">
@@ -119,7 +172,7 @@ export function StartPlanModal() {
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit" onClick={handleSubmit} disabled={isSubmitting}>
+          <Button type="submit" onClick={handleSubmit} disabled={isSubmitting || plansLoading}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

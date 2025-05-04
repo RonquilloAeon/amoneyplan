@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
+import { useToast } from '@/lib/hooks/useToast';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -26,12 +27,19 @@ export default function LoginPage() {
   
   const { login } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!username || !password) {
-      setError('Please enter both username and password');
+      const errorMessage = 'Please enter both username and password';
+      setError(errorMessage);
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: errorMessage,
+      });
       return;
     }
     
@@ -45,11 +53,25 @@ export default function LoginPage() {
         // Redirect to plans page on successful login
         router.push('/plans');
       } else {
-        setError(result.error || 'Login failed');
+        const errorMessage = result.error || 'Login failed';
+        setError(errorMessage);
+        console.log('Login failed, attempting to show toast:', errorMessage);
+        toast({
+          variant: 'destructive',
+          title: 'Login Failed',
+          description: errorMessage,
+        });
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      const errorMessage = 'An unexpected error occurred';
+      setError(errorMessage);
       console.error(err);
+      console.log('Caught exception during login, attempting to show toast:', errorMessage);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }

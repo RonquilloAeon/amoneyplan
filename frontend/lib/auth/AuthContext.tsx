@@ -138,7 +138,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Logout function
   const logout = () => {
-    signOut({ callbackUrl: '/auth/login' });
+    signOut({ callbackUrl: '/auth/signin' });
   };
 
   const value = {

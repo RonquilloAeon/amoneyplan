@@ -25,6 +25,8 @@ import { ScrollableAddAccountModal } from '../../components/ScrollableAddAccount
 import { PlanAccountCard } from '../../components/PlanAccountCard';
 import { useToast } from '@/lib/hooks/useToast';
 import { PlanAllocationProgress } from '@/components/PlanAllocationProgress';
+import { EmptyState } from '@/components/EmptyState';
+import { NewPlanGraphic } from '@/components/EmptyStateGraphics';
 
 // We'll style a div element as our badge since there seems to be an issue with the badge component import
 // This is a temporary solution until the badge component is fixed
@@ -199,11 +201,15 @@ export default function PlansPage() {
   if (!draftPlan) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold">No active money plan</h2>
-          <p className="text-muted-foreground">Start a new plan to manage your finances.</p>
-        </div>
-        <StartPlanModal />
+        <EmptyState
+          graphic={<NewPlanGraphic />}
+          title="Ready to plan your money?"
+          description={[
+            "Create a new plan when you've received income or have funds to distribute.",
+            "Money plans help you intentionally allocate your funds before spending, ensuring every dollar has a purpose."
+          ]}
+          additionalContent={<StartPlanModal />}
+        />
       </div>
     );
   }

@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusIcon } from 'lucide-react';
 import { PaginationControls } from '@/components/PaginationControls';
+import { EmptyState } from '@/components/EmptyState';
+import { AccountsGraphic } from '@/components/EmptyStateGraphics';
 
 // Renamed original component to avoid naming conflict
 function AccountsPageContent() {
@@ -28,7 +30,7 @@ function AccountsPageContent() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/auth/login');
+      router.push('/auth/signin');
     }
   }, [status, router]);
 
@@ -53,15 +55,16 @@ function AccountsPageContent() {
       {loading ? (
         <div className="py-8 text-center">Loading accounts...</div>
       ) : allAccounts.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 flex flex-col items-center">
-            <p className="text-muted-foreground mb-4">You don't have any accounts yet</p>
-            <Button onClick={() => router.push('/accounts/new')}>
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Create Your First Account
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyState
+          graphic={<AccountsGraphic />}
+          title="You don't have any accounts yet"
+          description={[
+            "Accounts help you organize your finances by tracking where your money is located.",
+            "Create accounts to track your checking, savings, credit cards, or any other place your money goes."
+          ]}
+          actionInstruction="Click the"
+          actionInstructionHighlight='"New Account"'
+        />
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2">

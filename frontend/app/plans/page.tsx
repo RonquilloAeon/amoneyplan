@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { PlusCircle, Loader2, ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plan } from '@/lib/hooks/usePlans';
+import { EmptyState } from '@/components/EmptyState';
+import { MoneyPlanGraphic } from '@/components/EmptyStateGraphics';
 
 export default function PlansListPage() {
   const { data: session, status } = useSession();
@@ -220,7 +222,7 @@ export default function PlansListPage() {
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Money Plans</h1>
+        <h1 className="text-3xl font-bold">Your Money Plans</h1>
         <Link href="/new">
           <Button>
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -230,16 +232,16 @@ export default function PlansListPage() {
       </div>
 
       {plans.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg bg-gray-50">
-          <h3 className="text-lg font-medium mb-2">No plans found</h3>
-          <p className="text-muted-foreground mb-4">Start by creating your first money plan.</p>
-          <Link href="/new">
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Plan
-            </Button>
-          </Link>
-        </div>
+        <EmptyState 
+          graphic={<MoneyPlanGraphic />}
+          title="You don't have any plans yet"
+          description={[
+            "Money plans help you allocate funds across your accounts without rigid budgeting. Create a plan to distribute your money where you need it, track what's been handled, and see what's left to allocate.",
+            "A great time to create a plan is when you have a large amount of money to allocate or after each pay period."
+          ]}
+          actionInstruction="Click the"
+          actionInstructionHighlight='"New Plan"'
+        />
       ) : (
         <>
           <div className="grid grid-cols-1 gap-6">
@@ -317,12 +319,8 @@ export default function PlansListPage() {
                               <div className="mt-1 pl-10 space-y-1">
                                 {account.buckets.map((bucket) => (
                                   <div key={bucket.id} className="flex justify-between items-center text-sm">
-                                    <p className={`text-muted-foreground ${account.isChecked ? 'line-through' : ''}`}>
-                                      {bucket.name}
-                                    </p>
-                                    <p className={account.isChecked ? 'text-muted-foreground' : ''}>
-                                      {formatCurrency(bucket.allocatedAmount)}
-                                    </p>
+                                    <p className="text-muted-foreground">{bucket.name}</p>
+                                    <p className="font-medium">{formatCurrency(bucket.allocatedAmount)}</p>
                                   </div>
                                 ))}
                               </div>
@@ -343,30 +341,8 @@ export default function PlansListPage() {
               </Card>
             ))}
           </div>
-
-          {/* Pagination */}
-          <div className="flex justify-center space-x-2 mt-6">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={pagination.handlePreviousPage}
-              disabled={!pagination.pageInfo.hasPreviousPage}
-            >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Previous
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={pagination.handleNextPage}
-              disabled={!pagination.pageInfo.hasNextPage}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
         </>
       )}
     </div>
   );
-} 
+}

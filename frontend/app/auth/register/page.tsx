@@ -52,9 +52,8 @@ export default function RegisterPage() {
       const result = await register(username, email, password, firstName, lastName);
 
       if (result.success) {
-        // Redirect to login page on successful registration
-        // Optionally, you could log them in directly and redirect to /plans
-        router.push('/auth/login?registered=true'); // Add a query param to show a success message on login
+        // Redirect directly to plans page after successful registration
+        router.push('/plans');
       } else {
         setError(result.error || 'Registration failed');
       }
@@ -70,9 +69,9 @@ export default function RegisterPage() {
     <div className="flex justify-center items-center min-h-[80vh]">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl">Register</CardTitle>
+          <CardTitle className="text-2xl">Join Fortana</CardTitle>
           <CardDescription>
-            Create your account to start planning
+            Fortana is a money planning tool for people who don't like to budget. Create your free account and start planning your money!
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -177,10 +176,10 @@ export default function RegisterPage() {
             <div className="text-sm text-center mt-4">
               Already have an account?{' '}
               <Link
-                href="/auth/login"
+                href="/auth/signin"
                 className="text-primary hover:underline"
               >
-                Login
+                Sign in
               </Link>
             </div>
           </CardFooter>

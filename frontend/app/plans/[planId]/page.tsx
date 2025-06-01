@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_PLAN, ARCHIVE_PLAN, SET_ACCOUNT_CHECKED_STATE } from '@/lib/graphql/operations';
+import { GET_PLAN, ARCHIVE_PLAN, SET_ACCOUNT_CHECKED_STATE, CREATE_SHARE_LINK } from '@/lib/graphql/operations';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 import { useToast } from '@/lib/hooks/useToast';
 import { Plan } from '@/lib/hooks/usePlans';
@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, Archive, ArrowLeft, Loader2 } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Loader2, Share, Clipboard, Mail, MessageSquare } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
@@ -25,6 +25,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 export default function PlanDetailsPage() {
   const { data: session, status } = useSession();
@@ -35,6 +47,11 @@ export default function PlanDetailsPage() {
   const planId = decodeURIComponent(encodedPlanId);
   const [isArchiving, setIsArchiving] = useState(false);
   const [checkingAccount, setCheckingAccount] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
   
   // For debugging
   useEffect(() => {
@@ -57,6 +74,7 @@ export default function PlanDetailsPage() {
   const plan: Plan = data?.moneyPlan;
   
   const [archivePlanMutation] = useMutation(ARCHIVE_PLAN);
+  const [createShareLink] = useMutation(CREATE_SHARE_LINK);
   
   const [setAccountCheckedState] = useMutation(SET_ACCOUNT_CHECKED_STATE, {
     onCompleted: (data) => {
@@ -178,6 +196,74 @@ export default function PlanDetailsPage() {
     }
   };
   
+  const handleCreateShareLink = async () => {
+    if (!planId) return;
+    
+    setIsCreatingLink(true);
+    try {
+      const { data } = await createShareLink({
+        variables: { planId, expiryDays: 14 }
+      });
+      
+      const result = data?.moneyPlan?.createShareLink;
+      
+      if (result.__typename === 'ApplicationError') {
+        throw new Error(result.message);
+      }
+      
+      setShareLink(result.url);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create share link",
+      });
+    } finally {
+      setIsCreatingLink(false);
+    }
+  };
+  
+  const handleSendEmail = async () => {
+    if (!shareLink || !recipientEmail) return;
+    
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch('/api/share-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipientEmail,
+          recipientName,
+          senderName: session?.user?.name || undefined,
+          planLink: shareLink,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to send email');
+      }
+      
+      toast({
+        title: "Email Sent!",
+        description: `Plan shared with ${recipientEmail}`,
+      });
+      
+      // Clear form
+      setRecipientEmail('');
+      setRecipientName('');
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to send email",
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+  
   // Show loading when checking authentication or fetching data
   if (status === 'loading' || loading) {
     return (
@@ -245,41 +331,169 @@ export default function PlanDetailsPage() {
           Back to Plans
         </Button>
         
-        {!plan.isArchived && (
+        <div className="flex space-x-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" onClick={handleCreateShareLink} disabled={isCreatingLink}>
+                {isCreatingLink ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Link...
+                  </>
+                ) : (
+                  <>
+                    <Share className="mr-2 h-4 w-4" />
+                    Share Plan
+                  </>
+                )}
+              </Button>
+            </DialogTrigger>
+            
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Share Plan</DialogTitle>
+                <DialogDescription>
+                  Share this plan with anyone using a temporary link (valid for 14 days)
+                </DialogDescription>
+              </DialogHeader>
+              
+              {shareLink && (
+                <Tabs defaultValue="link" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="link">Share Link</TabsTrigger>
+                    <TabsTrigger value="email">Send Email</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="link" className="py-4">
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Input value={shareLink} readOnly />
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(shareLink);
+                            toast({
+                              title: "Copied!",
+                              description: "Link copied to clipboard",
+                            });
+                          }}
+                        >
+                          <Clipboard className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          variant="outline"
+                          onClick={() => {
+                            window.open(`mailto:?subject=Money Plan Shared&body=I've shared a money plan with you. View it here: ${shareLink}`, '_blank');
+                          }}
+                        >
+                          <Mail className="mr-2 h-4 w-4" />
+                          Email Link
+                        </Button>
+                        
+                        <Button 
+                          variant="outline"
+                          onClick={() => {
+                            // For SMS integration
+                            const message = encodeURIComponent(`Check out this money plan: ${shareLink}`);
+                            window.open(`sms:?&body=${message}`, '_blank');
+                          }}
+                        >
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          SMS Link
+                        </Button>
+                      </div>
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="email" className="py-4">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="recipientEmail">Recipient Email</Label>
+                        <Input 
+                          id="recipientEmail"
+                          type="email" 
+                          placeholder="friend@example.com"
+                          value={recipientEmail}
+                          onChange={(e) => setRecipientEmail(e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="recipientName">Recipient Name (Optional)</Label>
+                        <Input 
+                          id="recipientName"
+                          placeholder="Friend's Name"
+                          value={recipientName}
+                          onChange={(e) => setRecipientName(e.target.value)}
+                        />
+                      </div>
+                      
+                      <Button 
+                        className="w-full" 
+                        onClick={handleSendEmail}
+                        disabled={!recipientEmail || isSendingEmail}
+                      >
+                        {isSendingEmail ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Send Email
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              )}
+              
+              <DialogFooter className="text-xs text-muted-foreground">
+                This link will expire in 14 days and can be used by anyone with the link.
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" className="bg-white">
-                <Archive className="h-4 w-4 mr-2" />
-                Archive Plan
+              <Button 
+                variant="outline" 
+                className="border-amber-600 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                disabled={isArchiving}
+              >
+                {isArchiving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Archiving...
+                  </>
+                ) : (
+                  <>
+                    <Archive className="mr-2 h-4 w-4" />
+                    Archive Plan
+                  </>
+                )}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Archive Money Plan</AlertDialogTitle>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to archive this plan? This action cannot be undone.
+                  This will archive the plan. You will still be able to view it, but not edit it.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction 
-                  onClick={handleArchivePlan}
-                  disabled={isArchiving}
-                  className={isArchiving ? "opacity-70 cursor-not-allowed" : ""}
-                >
-                  {isArchiving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Archiving...
-                    </>
-                  ) : (
-                    "Archive"
-                  )}
-                </AlertDialogAction>
+                <AlertDialogAction onClick={handleArchivePlan}>Continue</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        )}
+        </div>
       </div>
       
       <div className="space-y-8">

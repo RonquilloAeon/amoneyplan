@@ -59,7 +59,7 @@ class TestGraphQLAPI:
         query: str,
         fail_on_error: bool = True,
         user: TestUser | None = None,
-        variables: Dict[str, Any] = None,
+        variables: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Execute a GraphQL query and return the response."""
         data = {
@@ -78,6 +78,7 @@ class TestGraphQLAPI:
         result = response.json()
 
         if "errors" in result and fail_on_error:
+            print(result)
             __tracebackhide__ = True
             pytest.fail(f"errors returned: {result['errors']}")
 
@@ -175,13 +176,14 @@ class TestGraphQLAPI:
         mutation StartPlan($input: PlanStartInput!) {
             moneyPlan {
                 startPlan(input: $input) {
-                    ...on Success {
+                    ... on Success {
                         data
-                    }
-                    ...on ApplicationError {
                         message
                     }
-                    ...on UnexpectedError {
+                    ... on ApplicationError {
+                        message
+                    }
+                    ... on UnexpectedError {
                         message
                     }
                 }
@@ -191,7 +193,19 @@ class TestGraphQLAPI:
         variables = {"input": {"initialBalance": initial_balance, "notes": notes}}
 
         result = self.execute_query(client, create_plan_mutation, user=user, variables=variables)
-        plan_id = result["moneyPlan"]["startPlan"]["data"]["id"]
+
+        # Add debugging for the response
+        if "moneyPlan" not in result or "startPlan" not in result["moneyPlan"]:
+            pytest.fail(f"Failed to create plan. Response: {result}")
+
+        plan_result = result["moneyPlan"]["startPlan"]
+
+        # Check for error response
+        if "message" in plan_result and "data" not in plan_result:
+            pytest.fail(f"Failed to create plan: {plan_result['message']}")
+
+        # The data field contains a JSON object with the plan details
+        plan_id = plan_result["data"]["id"]
 
         # Create an account first
         account_id = self.create_account(client, user, "Test Account")
@@ -201,13 +215,14 @@ class TestGraphQLAPI:
         mutation AddAccount($input: AddAccountInput!) {
             moneyPlan {
                 addAccount(input: $input) {
-                    ...on Success {
+                    ... on Success {
                         data
-                    }
-                    ...on ApplicationError {
                         message
                     }
-                    ...on UnexpectedError {
+                    ... on ApplicationError {
+                        message
+                    }
+                    ... on UnexpectedError {
                         message
                     }
                 }
@@ -223,6 +238,14 @@ class TestGraphQLAPI:
         }
 
         result = self.execute_query(client, add_account_mutation, user=user, variables=account_variables)
+
+        # Check for successful account addition
+        if "moneyPlan" not in result or "addAccount" not in result["moneyPlan"]:
+            pytest.fail(f"Failed to add account to plan. Response: {result}")
+
+        if "message" in result["moneyPlan"]["addAccount"] and "data" not in result["moneyPlan"]["addAccount"]:
+            pytest.fail(f"Failed to add account to plan: {result['moneyPlan']['addAccount']['message']}")
+
         return plan_id, account_id
 
     def create_account(self, client: Client, user: TestUser, name: str) -> str:
@@ -231,13 +254,14 @@ class TestGraphQLAPI:
         mutation CreateAccount($input: CreateAccountInput!) {
             account {
                 create(input: $input) {
-                    ...on Success {
+                    ... on Success {
                         data
-                    }
-                    ...on ApplicationError {
                         message
                     }
-                    ...on UnexpectedError {
+                    ... on ApplicationError {
+                        message
+                    }
+                    ... on UnexpectedError {
                         message
                     }
                 }
@@ -246,4 +270,15 @@ class TestGraphQLAPI:
         """
         variables = {"input": {"name": name}}
         result = self.execute_query(client, add_account_mutation, user=user, variables=variables)
-        return result["account"]["create"]["data"]["id"]
+
+        # Check for successful account creation
+        if "account" not in result or "create" not in result["account"]:
+            pytest.fail(f"Failed to create account. Response: {result}")
+
+        account_result = result["account"]["create"]
+
+        # Check for error response
+        if "message" in account_result and "data" not in account_result:
+            pytest.fail(f"Failed to create account: {account_result['message']}")
+
+        return account_result["data"]["id"]

@@ -305,4 +305,52 @@ export const SET_ACCOUNT_CHECKED_STATE = gql`
       }
     }
   }
+`;
+
+export const CREATE_SHARE_LINK = gql`
+  mutation CreateShareLink($planId: GlobalID!, $expiryDays: Int) {
+    moneyPlan {
+      createShareLink(input: { planId: $planId, expiryDays: $expiryDays }) {
+        ... on ShareLinkResponse {
+          token
+          expiresAt
+          url
+        }
+        ... on ApplicationError {
+          message
+        }
+      }
+    }
+  }
+`;
+
+export const GET_SHARED_PLAN = gql`
+  query GetSharedPlan($token: String!) {
+    sharedPlan(token: $token) {
+      id
+      initialBalance
+      remainingBalance
+      notes
+      isCommitted
+      isArchived
+      createdAt
+      planDate
+      archivedAt
+      accounts {
+        id
+        isChecked
+        notes
+        account {
+          id
+          name
+        }
+        buckets {
+          id
+          name
+          category
+          allocatedAmount
+        }
+      }
+    }
+  }
 `; 

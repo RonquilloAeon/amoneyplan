@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from typing import List, Optional
 
@@ -21,12 +22,11 @@ from amoneyplan.domain.money_plan import (
 
 from .models import Account, Bucket, MoneyPlan, PlanAccount
 
+logger = logging.getLogger("django")
+
 
 class AccountRepository:
     """Repository for Account entity."""
-
-    def __init__(self):
-        self._user_account = get_current_account()
 
     def get_by_id(self, account_id: str) -> Optional[DomainAccount]:
         """
@@ -87,7 +87,7 @@ class AccountRepository:
         if not orm_account:
             orm_account = Account(
                 id=domain_account.id,
-                user_account=self._user_account,
+                user_account=get_current_account(),
             )
 
         orm_account.name = domain_account.name
@@ -175,6 +175,8 @@ def from_domain_money_plan(domain_plan: DomainMoneyPlan, orm_plan: Optional[Mone
     Returns:
         Updated or new Django MoneyPlan model
     """
+    logger.info("Saving plan %s", domain_plan.id)
+
     if orm_plan is None:
         # Create new model
         orm_plan = MoneyPlan(
@@ -204,10 +206,7 @@ def from_domain_money_plan(domain_plan: DomainMoneyPlan, orm_plan: Optional[Mone
 class MoneyPlanRepository:
     """Repository for MoneyPlan entity."""
 
-    def __init__(self):
-        self._user_account = get_current_account()
-
-    def get_by_id(self, plan_id) -> DomainMoneyPlan:
+    def get_by_id(self, plan_id, scoped: bool = True) -> DomainMoneyPlan:
         """
         Get a money plan by ID and user account.
 
@@ -217,7 +216,10 @@ class MoneyPlanRepository:
         Raises:
             MoneyPlan.DoesNotExist: If the plan doesn't exist or doesn't belong to the current user
         """
-        orm_plan = MoneyPlan.objects.get(id=plan_id)
+        if scoped:
+            orm_plan = MoneyPlan.objects.get(id=plan_id)
+        else:
+            orm_plan = MoneyPlan.unscoped.get(id=plan_id)
         return to_domain_money_plan(orm_plan)
 
     def get_current_plan(self) -> Optional[DomainMoneyPlan]:
@@ -296,7 +298,7 @@ class MoneyPlanRepository:
                 plan_account = PlanAccount(
                     plan=orm_plan,
                     account=account,
-                    user_account=self._user_account,
+                    user_account=get_current_account(),
                     is_checked=domain_plan_account.is_checked,
                     notes=domain_plan_account.notes,
                 )
@@ -335,7 +337,7 @@ class MoneyPlanRepository:
                 # Create new bucket
                 bucket = Bucket(
                     plan_account=plan_account,
-                    user_account=self._user_account,
+                    user_account=get_current_account(),
                     name=domain_bucket.name,
                     category=domain_bucket.category,
                     allocated_amount=domain_bucket.allocated_amount.as_decimal,
@@ -365,7 +367,7 @@ class MoneyPlanRepository:
         """
         # Create ORM model first
         orm_plan = MoneyPlan(
-            user_account=self._user_account,
+            user_account=get_current_account(),
             initial_balance=initial_balance,
             remaining_balance=initial_balance,
             notes=notes,

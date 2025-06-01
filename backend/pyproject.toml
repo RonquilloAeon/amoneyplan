@@ -37,7 +37,7 @@ faker = "^37.1.0"
 pytest-profiling = "^1.8.1"
 
 [tool.pytest.ini_options]
-addopts = "-s"
+log_cli = true
 testpaths = "tests"
 python_files = "test_*.py"
 django_find_project = true
@@ -45,6 +45,11 @@ django_find_project = true
 [tool.coverage.run]
 source = ["src"]
 branch = true
+omit = [
+    "src/amoneyplan/api/management/commands/export_schema.py",
+    "src/amoneyplan/money_plans/management/commands/init_db.py",
+    "src/amoneyplan/wsgi.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [

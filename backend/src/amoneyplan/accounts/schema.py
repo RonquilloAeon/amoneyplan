@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from strawberry.types import Info
 
-from amoneyplan.accounts.models import Account, AccountMembership, User
+from amoneyplan.accounts.use_cases import AccountUseCases, RegisterAccountData
 
 from .auth import generate_token
 
@@ -71,36 +71,19 @@ class AuthMutations:
         first_name: str = "",
         last_name: str = "",
     ) -> AuthResponse:
+        use_case = AccountUseCases()
+        result = use_case.register_account(
+            RegisterAccountData(username, email, password, first_name, last_name)
+        )
+        if not result.success:
+            return AuthResponse(success=False, error=str(result.error))
+
         try:
-            if User.objects.filter(username=username).exists():
-                return AuthResponse(success=False, error="Username already exists")
-
-            # Add check for email uniqueness
-            if User.objects.filter(email=email).exists():
-                return AuthResponse(success=False, error="Email already exists")
-
-            # TODO move to a use case
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-            )
-            account = Account.objects.create(
-                owner=user,
-                name=f"{username} Money Planning",
-            )
-            AccountMembership.objects.create(
-                account=account,
-                user=user,
-                role="manager",
-                status="active",
-            )
-
+            user, _account = result.data
             return AuthResponse(success=True, token=generate_token(user))
         except Exception as e:
-            return AuthResponse(success=False, error=str(e))
+            logger.error(f"Error generating token: {e}")
+            return AuthResponse(success=False, error="An unexpected error occurred while logging in.")
 
     @strawberry.mutation
     def login(

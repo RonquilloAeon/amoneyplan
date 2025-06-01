@@ -109,7 +109,7 @@ class PlanAccount:
 
         return account
 
-    def add_bucket(self, bucket_name: str, category: str, initial_amount: Money = None) -> Bucket:
+    def add_bucket(self, bucket_name: str, category: str, initial_amount: Money | None = None) -> Bucket:
         """
         Add a new bucket to this account.
         """
@@ -150,7 +150,7 @@ class PlanAccount:
         self.notes = notes
 
     def __str__(self) -> str:
-        return f"{self.id} ({len(self.buckets)} buckets)"
+        return f"PlanAccount {self.account_id} ({len(self.buckets)} buckets)"
 
 
 @dataclass
@@ -344,7 +344,7 @@ class MoneyPlan:
         # Find the bucket
         bucket = account.get_bucket(bucket_name)
         if not bucket:
-            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found in account '{account.id}'")
+            raise BucketNotFoundError(f"Bucket {bucket_name!r} not found in the account")
 
         # For positive amounts (allocating funds), check if we have enough funds
         if amount > Money(0) and amount > self.remaining_balance:

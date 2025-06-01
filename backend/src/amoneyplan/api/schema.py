@@ -1,8 +1,9 @@
 import logging
-from datetime import date
-from typing import List, Optional
+from datetime import date, datetime
+from typing import List, Optional, Union
 
 import strawberry
+from django.conf import settings
 from strawberry import relay
 from strawberry.types import Info
 from strawberry_django.optimizer import DjangoOptimizerExtension
@@ -366,6 +367,19 @@ class UpdateAccountInput:
     notes: str = ""
 
 
+@strawberry.input
+class CreateShareLinkInput:
+    plan_id: relay.GlobalID
+    expiry_days: int = 14  # Default to 14 days
+
+
+@strawberry.type
+class ShareLinkResponse:
+    token: str
+    expires_at: datetime
+    url: str
+
+
 @strawberry.type
 class AccountQueries:
     @strawberry.field
@@ -578,6 +592,17 @@ class Query(AuthQueries):
                     end_cursor=None,
                 ),
             )
+
+    @strawberry.field
+    def shared_plan(self, info: Info, token: str) -> Optional[MoneyPlan]:
+        """Get a shared money plan by token without authentication."""
+        use_case = MoneyPlanUseCases()
+        logger.info(f"Getting shared plan with token: {token}")
+        result = use_case.get_shared_plan(token)
+
+        if result.success and result.has_data():
+            return MoneyPlan.from_domain(result.data)
+        return None
 
 
 # GraphQL mutations
@@ -926,6 +951,30 @@ class MoneyPlanMutations:
                 message="Account notes updated successfully.",
             )
         except (MoneyPlanError, ValueError) as e:
+            return graphql_common.ApplicationError(message=str(e))
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    def create_share_link(
+        self, info: Info, input: CreateShareLinkInput
+    ) -> Union[ShareLinkResponse, graphql_common.ApplicationError]:
+        """Create a temporary share link for a plan."""
+        if not info.context.request.user.is_authenticated:
+            return graphql_common.ApplicationError(message="Authentication required")
+
+        try:
+            plan_id = input.plan_id.node_id
+            use_case = MoneyPlanUseCases()
+            result = use_case.create_share_link(plan_id, input.expiry_days, info.context.request.user)
+
+            if result.success:
+                frontend_url = settings.FRONTEND_URL
+                return ShareLinkResponse(
+                    token=result.data.token,
+                    expires_at=result.data.expires_at,
+                    url=f"{frontend_url}/shared/{result.data.token}",
+                )
+            return graphql_common.ApplicationError(message=result.message)
+        except Exception as e:
             return graphql_common.ApplicationError(message=str(e))
 
 

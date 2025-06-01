@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { Navbar } from '@/components/Navbar';
-import { useEffect } from 'react';
+import { ServiceWorkerEffect } from '@/components/ServiceWorkerEffect';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,22 +23,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Service worker registration
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(
-          (registration) => {
-            console.log('Service Worker registered with scope:', registration.scope);
-          },
-          (err) => {
-            console.log('Service Worker registration failed:', err);
-          }
-        );
-      });
-    }
-  }, []);
-
   return (
     <html lang="en">
       <head>
@@ -47,6 +31,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Providers>
+          <ServiceWorkerEffect />
           <Navbar />
           <div className="container max-w-6xl mx-auto px-4 py-8">
             {children}

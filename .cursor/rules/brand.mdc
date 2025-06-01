@@ -1,0 +1,96 @@
+---
+description: 
+globs: *.tsx,*.css
+alwaysApply: false
+---
+# Fortana Brand Spec
+
+## 🎨 Color Palette
+
+### Primary Colors
+- **brand.primary**: `#1D33DD` – Palatinate Blue  
+  - Use for: logo, primary buttons, links, active states
+  - Avoid large background blocks unless paired with white/light backgrounds
+
+- **brand.surface**: `#E1E5F2` – Lavender (Web)  
+  - Use for: background surfaces, section containers, cards
+
+- **brand.surfaceAlt**: `#BFDBF7` – Columbia Blue  
+  - Use for: hover states, form inputs, background accents
+
+- **brand.accent**: `#2E5339` – Cal Poly Green  
+  - Use for: success indicators, CTA hover states, charts, highlights
+
+- **brand.deep**: `#37000A` – Black Bean  
+  - Use for: footer background, overlays, modals, contrast-heavy zones
+
+- **brand.white**: `#FFFFFF` – White  
+  - Use for: text on dark backgrounds, cards, surfaces
+
+- **brand.text**: `#1D1D1D` – Primary text  
+  - Use for: body copy, headlines
+
+- **brand.muted**: `#6B7280` – Muted gray  
+  - Use for: subtext, secondary UI, helper text
+
+- **brand.error**: `#DC2626` – Red 600  
+  - Use for: error messages, validation states
+
+### Color info
+- Trust & Clarity: #1D33DD (Palatinate blue) gives you a strong, authoritative brand color. Blue is widely used in finance because it evokes trust, security, and stability.
+- Soft Contrast: #BFDBF7 (Columbia blue) and #E1E5F2 (Lavender) serve well as backgrounds or secondary UI elements, providing a calm, readable contrast.
+- Financial Strength & Balance: #2E5339 (Cal Poly green) can reinforce growth, money, and resilience—perfect for charts, CTAs, or accent details.
+- Sophisticated Depth: #37000A (Black bean) adds richness and emotional gravity. It’s great for footer backgrounds, highlight borders, or serious sections (e.g. security, legal).
+
+---
+
+## ✍️ Typography
+
+### Logo
+- **Manrope 700**
+  - Usage: logo wordmark, app name, hero headings
+
+### Body Copy
+- **Inter 400**
+  - Usage: general copy, UI text, paragraphs
+### Monetary Values / Code
+- **Inconsolata**
+  - Usage: monetary values, transaction data, code blocks, alignment-critical numbers
+
+---
+
+## 🧱 Best Practices
+
+- Use `brand.primary` for emphasis but avoid oversaturation.
+- Use `brand.surface` and `brand.surfaceAlt` to create clean, breathable layouts.
+- Reserve `brand.deep` for serious tones (e.g. footers, legal, security).
+- Pair **Inconsolata** with a neutral font (Inter) for visual clarity in monetary or technical data.
+- Stick to 2–3 fonts max for consistency.
+- Always check color contrast for accessibility.
+
+---
+
+## 🧪 Tailwind Integration
+
+```js
+// tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          primary: '#1D33DD',
+          surface: '#E1E5F2',
+          surfaceAlt: '#BFDBF7',
+          accent: '#2E5339',
+          deep: '#37000A',
+          text: '#1D1D1D',
+          muted: '#6B7280',
+          white: '#FFFFFF',
+          error: '#DC2626',
+        },
+      },
+    },
+  },
+}
+```

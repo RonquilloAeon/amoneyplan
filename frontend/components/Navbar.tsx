@@ -15,8 +15,8 @@ export function Navbar() {
     <nav className="border-b">
       <div className="container max-w-6xl mx-auto flex justify-between items-center p-4">
         <div className="flex items-center">
-          <Link href="/" className="font-bold text-xl mr-6">
-            Fortana
+          <Link href="/" className="font-bold text-xl mr-6 font-manrope">
+            fortana
           </Link>
           <div className="flex gap-4">
             <Link 

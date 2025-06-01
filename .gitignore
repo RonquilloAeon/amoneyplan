@@ -21,3 +21,6 @@ infra_dev/terraform/amoneyplan-config
 # Sandbox
 a_sandbox/
 old_*
+
+# Misc
+.DS_Store

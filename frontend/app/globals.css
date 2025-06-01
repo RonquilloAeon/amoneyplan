@@ -1,51 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;700&family=Inter:wght@400;700&family=Manrope:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 220 90% 55%; /* Adjusted blue */
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 9.1% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 220 90% 55%; /* Adjusted blue */
+    --background: 220 29% 96%; /* brand.surface E1E5F2 */
+    --foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --card: 0 0% 100%; /* brand.white #FFFFFF */
+    --card-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --popover: 0 0% 100%; /* brand.white #FFFFFF */
+    --popover-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --primary: 231 77% 52%; /* brand.primary #1D33DD */
+    --primary-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --secondary: 220 43% 90%; /* brand.surfaceAlt #BFDBF7 */
+    --secondary-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --muted: 221 14% 60%; /* brand.muted #6B7280 */
+    --muted-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --accent: 137 37% 20%; /* brand.accent #2E5339 */
+    --accent-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --destructive: 0 72% 51%; /* brand.error #DC2626 */
+    --destructive-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --border: 220 29% 88%; /* Slightly darker brand.surface for borders */
+    --input: 220 43% 90%; /* brand.surfaceAlt #BFDBF7 */
+    --ring: 231 77% 52%; /* brand.primary #1D33DD */
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
-    --card: 224 71.4% 4.1%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 71.4% 4.1%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 210 90% 60%; /* Slightly lighter blue for dark */
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 215 27.9% 16.9%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 50.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 210 90% 60%; /* Slightly lighter blue for dark */
+    --background: 348 100% 11%; /* brand.deep #37000A */
+    --foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --card: 348 100% 11%; /* brand.deep #37000A */
+    --card-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --popover: 348 100% 11%; /* brand.deep #37000A */
+    --popover-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --primary: 231 77% 62%; /* Lighter brand.primary for dark mode */
+    --primary-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --secondary: 220 29% 20%; /* Darker brand.surfaceAlt */
+    --secondary-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --muted: 221 14% 50%; /* Darker brand.muted */
+    --muted-foreground: 0 0% 100%; /* brand.white #FFFFFF */
+    --accent: 137 37% 30%; /* Lighter brand.accent for dark mode */
+    --accent-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --destructive: 0 72% 61%; /* Lighter brand.error for dark mode */
+    --destructive-foreground: 0 0% 11%; /* brand.text #1D1D1D */
+    --border: 220 29% 15%; /* Darker border for dark mode */
+    --input: 220 29% 20%; /* Darker brand.surfaceAlt */
+    --ring: 231 77% 62%; /* Lighter brand.primary for dark mode */
   }
 }
 
@@ -55,6 +57,17 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: theme('fontFamily.inter'); /* Set default body font to Inter */
+  }
+
+  /* Apply Manrope to headings */
+  h1, h2, h3, h4, h5, h6, .font-manrope {
+    font-family: theme('fontFamily.manrope');
+  }
+
+  /* Apply Inconsolata for code, pre, kbd, samp and monetary values */
+  code, pre, kbd, samp, .font-inconsolata {
+    font-family: theme('fontFamily.inconsolata');
   }
 }
 

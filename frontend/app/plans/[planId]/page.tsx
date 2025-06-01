@@ -37,6 +37,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 export default function PlanDetailsPage() {
   const { data: session, status } = useSession();
@@ -360,8 +361,26 @@ export default function PlanDetailsPage() {
               {shareLink && (
                 <Tabs defaultValue="link" className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="link">Share Link</TabsTrigger>
-                    <TabsTrigger value="email">Send Email</TabsTrigger>
+                    <TabsTrigger 
+                      value="link"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+                        "data-[state=inactive]:bg-transparent data-[state=inactive]:text-white dark:data-[state=inactive]:bg-slate-800 dark:data-[state=inactive]:text-slate-50"
+                      )}
+                    >
+                      Share Link
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="email"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+                        "data-[state=inactive]:bg-transparent data-[state=inactive]:text-white dark:data-[state=inactive]:bg-slate-800 dark:data-[state=inactive]:text-slate-50"
+                      )}
+                    >
+                      Send Email
+                    </TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="link" className="py-4">
@@ -454,7 +473,7 @@ export default function PlanDetailsPage() {
                 </Tabs>
               )}
               
-              <DialogFooter className="text-xs text-muted-foreground">
+              <DialogFooter className="text-xs text-muted-foreground sm:justify-start">
                 This link will expire in 14 days and can be used by anyone with the link.
               </DialogFooter>
             </DialogContent>

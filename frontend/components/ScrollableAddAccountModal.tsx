@@ -319,14 +319,22 @@ export function ScrollableAddAccountModal({ planId, availableAccounts, onSuccess
                     <TabsTrigger 
                       value="existing" 
                       disabled={availableAccounts.length === 0 || isSubmitting}
-                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm",
+                        "data-[state=inactive]:bg-white data-[state=inactive]:text-foreground dark:data-[state=inactive]:bg-slate-700"
+                      )}
                     >
                       Use Existing Account
                     </TabsTrigger>
                     <TabsTrigger 
                       value="new"
                       disabled={isSubmitting}
-                      className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      className={cn(
+                        "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                        "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm",
+                        "data-[state=inactive]:bg-white data-[state=inactive]:text-foreground dark:data-[state=inactive]:bg-slate-700"
+                      )}
                     >
                       Create New Account
                     </TabsTrigger>

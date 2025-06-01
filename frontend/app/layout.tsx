@@ -26,8 +26,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="theme-color" content="#4F46E5" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <meta name="theme-color" content="#1D33DD" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <link rel="icon" type="image/png" href="/icons/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-title" content="Fortana" />
       </head>
       <body className={inter.className}>
         <Providers>

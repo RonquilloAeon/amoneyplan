@@ -9,38 +9,42 @@ alwaysApply: false
 
 ### Primary Colors
 - **brand.primary**: `#1D33DD` – Palatinate Blue  
-  - Use for: logo, primary buttons, links, active states
-  - Avoid large background blocks unless paired with white/light backgrounds
+  - Use for: logo, primary buttons, links, active states  
+  - Avoid large background blocks unless paired with white/light surfaces  
 
-- **brand.surface**: `#E1E5F2` – Lavender (Web)  
-  - Use for: background surfaces, section containers, cards
+- **brand.surface**: `#A6CFD5` – Light Blue  
+  - Use for: background surfaces, section containers, app layout  
 
 - **brand.surfaceAlt**: `#BFDBF7` – Columbia Blue  
-  - Use for: hover states, form inputs, background accents
+  - Use for: hover states, cards, input backgrounds  
 
-- **brand.accent**: `#2E5339` – Cal Poly Green  
-  - Use for: success indicators, CTA hover states, charts, highlights
+- **brand.accent**: `#0A8754` – Sea Green  
+  - Use for: success indicators, data highlights, CTA accents  
 
-- **brand.deep**: `#37000A` – Black Bean  
-  - Use for: footer background, overlays, modals, contrast-heavy zones
+- **brand.attention**: `#D81E5B` – Raspberry  
+  - Use for: alerts, promotional buttons, high-contrast badges  
+
+- **brand.text**: `#222222` – Eerie Black  
+  - Use for: body text, navigation, headings  
 
 - **brand.white**: `#FFFFFF` – White  
-  - Use for: text on dark backgrounds, cards, surfaces
+  - Use for: base backgrounds, inverse text  
 
-- **brand.text**: `#1D1D1D` – Primary text  
-  - Use for: body copy, headlines
-
-- **brand.muted**: `#6B7280` – Muted gray  
-  - Use for: subtext, secondary UI, helper text
+- **brand.muted**: `#6B7280` – Muted Gray  
+  - Use for: helper text, secondary UI labels  
 
 - **brand.error**: `#DC2626` – Red 600  
-  - Use for: error messages, validation states
+  - Use for: validation errors, critical alerts  
 
-### Color info
-- Trust & Clarity: #1D33DD (Palatinate blue) gives you a strong, authoritative brand color. Blue is widely used in finance because it evokes trust, security, and stability.
-- Soft Contrast: #BFDBF7 (Columbia blue) and #E1E5F2 (Lavender) serve well as backgrounds or secondary UI elements, providing a calm, readable contrast.
-- Financial Strength & Balance: #2E5339 (Cal Poly green) can reinforce growth, money, and resilience—perfect for charts, CTAs, or accent details.
-- Sophisticated Depth: #37000A (Black bean) adds richness and emotional gravity. It’s great for footer backgrounds, highlight borders, or serious sections (e.g. security, legal).
+---
+
+### Color Info
+
+- **Trust & Authority**: `#1D33DD` anchors the brand with strength and clarity  
+- **Light & Calm**: `#A6CFD5` and `#BFDBF7` keep the interface light, clean, and approachable  
+- **Financial Confidence**: `#0A8754` reinforces growth, success, and stability  
+- **Energy & Urgency**: `#D81E5B` should be used intentionally for bold actions or alerts  
+- **Readable & Neutral**: `#222222` ensures accessible, grounded typography across light backgrounds  
 
 ---
 
@@ -53,6 +57,7 @@ alwaysApply: false
 ### Body Copy
 - **Inter 400**
   - Usage: general copy, UI text, paragraphs
+
 ### Monetary Values / Code
 - **Inconsolata**
   - Usage: monetary values, transaction data, code blocks, alignment-critical numbers
@@ -61,12 +66,13 @@ alwaysApply: false
 
 ## 🧱 Best Practices
 
-- Use `brand.primary` for emphasis but avoid oversaturation.
-- Use `brand.surface` and `brand.surfaceAlt` to create clean, breathable layouts.
-- Reserve `brand.deep` for serious tones (e.g. footers, legal, security).
-- Pair **Inconsolata** with a neutral font (Inter) for visual clarity in monetary or technical data.
-- Stick to 2–3 fonts max for consistency.
-- Always check color contrast for accessibility.
+- Use `brand.primary` for strong CTAs, top navigation, and key interactions  
+- Use `brand.surface` and `brand.surfaceAlt` to create clean visual hierarchy  
+- Use `brand.accent` to reinforce growth or value  
+- Reserve `brand.attention` for high-signal, low-frequency use  
+- Use only 2–3 typefaces max for clarity  
+- Check accessibility contrast at all times  
+- Favor light UI with colorful accents unless inverting purposefully  
 
 ---
 
@@ -80,11 +86,11 @@ module.exports = {
       colors: {
         brand: {
           primary: '#1D33DD',
-          surface: '#E1E5F2',
+          surface: '#A6CFD5',
           surfaceAlt: '#BFDBF7',
-          accent: '#2E5339',
-          deep: '#37000A',
-          text: '#1D1D1D',
+          accent: '#0A8754',
+          attention: '#D81E5B',
+          text: '#222222',
           muted: '#6B7280',
           white: '#FFFFFF',
           error: '#DC2626',

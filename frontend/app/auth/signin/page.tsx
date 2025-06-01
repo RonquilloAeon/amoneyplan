@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/lib/hooks/useToast';
+import Image from 'next/image';
 
 // Component containing the actual sign-in form logic
 function SignInForm() {
@@ -176,7 +177,10 @@ function SignInForm() {
 // Default export wraps the form in Suspense
 export default function SignInPage() {
   return (
-    <div className="flex justify-center items-center min-h-[80vh]">
+    <div className="flex flex-col items-center justify-center min-h-screen py-2">
+      <div className="mb-8">
+        <Image src="/icons/fortana-logo.svg" alt="Fortana Logo" width={64} height={64} />
+      </div>
       <Suspense fallback={<div>Loading sign-in form...</div>}>
         <SignInForm />
       </Suspense>

@@ -75,7 +75,7 @@
   /* Lighter placeholder text */
   input::placeholder,
   textarea::placeholder {
-    @apply text-gray-400 dark:text-gray-500;
+    @apply text-gray-400 dark:text-gray-500 !important;
   }
 }
 
@@ -157,4 +157,4 @@
 /* Ensure Radix Primitives portal elements are top-most */
 [data-radix-portal] {
   z-index: 1000 !important; /* Adjust if needed, ensure it's higher than other elements */
-} 
+}

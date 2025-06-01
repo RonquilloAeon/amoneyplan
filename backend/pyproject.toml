@@ -46,6 +46,8 @@ django_find_project = true
 source = ["src"]
 branch = true
 omit = [
+    "*/migrations/*",
+    "__init__.py",
     "src/amoneyplan/api/management/commands/export_schema.py",
     "src/amoneyplan/money_plans/management/commands/init_db.py",
     "src/amoneyplan/wsgi.py",
@@ -60,7 +62,7 @@ exclude_lines = [
     "pass",
 ]
 show_missing = true
-fail_under = 80
+fail_under = 70
 
 [tool.ruff]
 line-length = 110

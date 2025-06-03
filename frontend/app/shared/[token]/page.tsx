@@ -110,7 +110,7 @@ export default function SharedPlanPage() {
                           {planAccount.account.name}
                         </CardTitle>
                         {planAccount.isChecked && (
-                          <Badge variant="success" className="ml-2">
+                          <Badge variant="default" className="ml-2">
                             Checked
                           </Badge>
                         )}

@@ -123,6 +123,10 @@ LOGGING = {
             "level": os.getenv("MP_LOG_LEVEL", "INFO"),
             "propagate": True,
         },
+        "root": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+        },
     },
 }
 

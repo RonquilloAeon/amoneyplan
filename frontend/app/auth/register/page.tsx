@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function RegisterPage() {
   const [username, setUsername] = useState('');
@@ -66,7 +67,10 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-[80vh]">
+    <div className="flex flex-col items-center justify-center min-h-screen py-2">
+      <div className="mb-8">
+        <Image src="/icons/fortana-logo.svg" alt="Fortana Logo" width={64} height={64} />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">Join Fortana</CardTitle>

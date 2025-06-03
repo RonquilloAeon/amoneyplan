@@ -1,11 +1,15 @@
 import logging
-from datetime import date, datetime, timezone
+import secrets
+from datetime import date, timedelta
 from typing import List, Optional, TypeVar, Union
 
+from django.contrib.auth.models import AnonymousUser, User
 from django.db import transaction
 
+from amoneyplan.accounts.tenancy import get_current_account
 from amoneyplan.common.models import generate_safe_cuid16
-from amoneyplan.common.use_cases import UseCaseResult
+from amoneyplan.common.time import get_utc_now
+from amoneyplan.common.use_cases import UseCaseException, UseCaseResult
 from amoneyplan.domain.account import Account as DomainAccount
 from amoneyplan.domain.money import Money
 from amoneyplan.domain.money_plan import (
@@ -15,7 +19,7 @@ from amoneyplan.domain.money_plan import (
     MoneyPlan as DomainMoneyPlan,
 )
 
-from .models import MoneyPlan
+from .models import MoneyPlan, PlanShareLink
 from .repositories import (
     AccountRepository,
     MoneyPlanRepository,
@@ -264,7 +268,7 @@ class MoneyPlanUseCases:
                 plan = DomainMoneyPlan.start_plan(
                     id=plan_id,
                     initial_balance=initial_balance,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=get_utc_now(),
                     plan_date=plan_date or date.today(),
                     default_allocations=default_allocations,
                     notes=notes,
@@ -609,7 +613,7 @@ class MoneyPlanUseCases:
             plan = plan_result.data
 
             # Use the domain model's archive_plan method
-            plan.archive_plan(datetime.now(timezone.utc))
+            plan.archive_plan(get_utc_now())
 
             # Save the updated domain model through the repository
             self.money_plan_repo.save(plan)
@@ -725,7 +729,12 @@ class MoneyPlanUseCases:
             # Get the source plan
             source_plan_result = self.get_plan(source_plan_id)
             if not source_plan_result.success:
-                return UseCaseResult.failure(error=source_plan_result.error)
+                logger.warning(f"Error getting source plan: {source_plan_result.error}")
+                return UseCaseResult.failure(
+                    error=MoneyPlanError(
+                        "Unable to copy plan structure because the source plan was not found."
+                    )
+                )
 
             source_plan = source_plan_result.data
 
@@ -737,7 +746,7 @@ class MoneyPlanUseCases:
                 id=plan_id,
                 source_plan=source_plan,
                 initial_balance=initial_balance,
-                created_at=datetime.now(timezone.utc),
+                created_at=get_utc_now(),
                 plan_date=plan_date or date.today(),
                 notes=notes,
             )
@@ -753,3 +762,89 @@ class MoneyPlanUseCases:
         except Exception as e:
             logger.error(f"Error copying plan structure: {e}", exc_info=True)
             return UseCaseResult.failure(error=e)
+
+    @transaction.atomic
+    def create_share_link(self, plan_id: str, expiry_days: int, user: User) -> UseCaseResult:
+        """
+        Create a temporary share link for a plan.
+
+        Args:
+            plan_id: The ID of the plan to share
+            expiry_days: Number of days before the link expires (default: 14)
+            request: Optional request object containing the user
+
+        Returns:
+            UseCaseResult containing the share link details or error
+        """
+        try:
+            # Get the plan
+            plan_result = self.get_plan(plan_id)
+            if not plan_result.success:
+                return UseCaseResult.failure(
+                    UseCaseException("Unable to create share link because the plan does not exist.")
+                )
+
+            # Generate a random token
+            token = secrets.token_urlsafe(32)
+            expires_at = get_utc_now() + timedelta(days=expiry_days)
+
+            # Create share link
+            if isinstance(user, AnonymousUser):
+                return UseCaseResult.failure(UseCaseException("Could not determine the current user."))
+
+            current_account = get_current_account()
+
+            if not current_account:
+                return UseCaseResult.failure(UseCaseException("Could not determine the current account."))
+
+            share_link = PlanShareLink.objects.create(
+                plan_id=plan_id,
+                token=token,
+                expires_at=expires_at,
+                created_by=user,
+                user_account=current_account,
+            )
+
+            return UseCaseResult.success(data=share_link)
+        except Exception as e:
+            logger.error(f"Error creating share link: {e}", exc_info=True)
+            return UseCaseResult.failure(
+                UseCaseException("Unable to create share link."), message="Please try again later."
+            )
+
+    def get_shared_plan(self, token: str) -> UseCaseResult[DMP]:
+        """
+        Get a plan by share token without requiring authentication.
+
+        Args:
+            token: The share token
+
+        Returns:
+            UseCaseResult containing the plan or error
+        """
+        try:
+            # Find valid share link
+
+            share_link = (
+                PlanShareLink.unscoped.filter(
+                    token=token,
+                )
+                .order_by("-expires_at")
+                .first()
+            )
+
+            logger.info(f"Found share link: {share_link}")
+
+            if not share_link or share_link.expires_at < get_utc_now():
+                return UseCaseResult.failure(UseCaseException("The share link is invalid or has expired."))
+
+            # Return the associated plan
+            plan = self.money_plan_repo.get_by_id(share_link.plan_id, scoped=False)
+            logger.info(f"Found plan: {plan}")
+
+            return UseCaseResult.success(data=plan)
+        except Exception as e:
+            logger.error(f"Error retrieving shared plan: {e}", exc_info=True)
+            return UseCaseResult.failure(
+                UseCaseException("Unable to retrieve shared plan."), message="Please try again later."
+            )

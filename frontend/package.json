@@ -30,6 +30,7 @@
     "eslint-config-next": "15.2.4",
     "graphql": "^16.8.1",
     "lucide-react": "^0.331.0",
+    "mailersend": "^2.5.0",
     "next": "15.2.4",
     "next-auth": "^4.24.11",
     "postcss": "^8.4.35",

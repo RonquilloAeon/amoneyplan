@@ -4,10 +4,12 @@ Django ORM models for the Money Plan app.
 
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 
 from amoneyplan.accounts.models import TenantScopedModel
 from amoneyplan.common.models import BaseModel
+from amoneyplan.common.time import get_utc_now
 
 
 class Account(TenantScopedModel):
@@ -44,6 +46,22 @@ class MoneyPlan(TenantScopedModel):
         status = "Committed" if self.committed else "Draft"
         archived = " (Archived)" if self.is_archived else ""
         return f"Plan {self.plan_date} - {status}{archived}"
+
+
+class PlanShareLink(TenantScopedModel):
+    """Temporary share link for a money plan."""
+
+    plan = models.ForeignKey(MoneyPlan, on_delete=models.CASCADE, related_name="share_links")
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    expires_at = models.DateTimeField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    def is_valid(self):
+        """Check if the link is still valid."""
+        return self.expires_at > get_utc_now()
+
+    def __str__(self):
+        return f"Share link for {self.plan} (expires: {self.expires_at})"
 
 
 class PlanAccount(TenantScopedModel):

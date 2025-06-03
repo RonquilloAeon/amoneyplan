@@ -60,6 +60,22 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          primary: '#1D33DD',
+          surface: '#A6CFD5',
+          surfaceAlt: '#BFDBF7',
+          accent: '#0A8754',
+          attention: '#D81E5B',
+          text: '#222222',
+          muted: '#6B7280',
+          white: '#FFFFFF',
+          error: '#DC2626',
+        },
+      },
+      fontFamily: {
+        manrope: ['Manrope', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
+        inconsolata: ['Inconsolata', 'monospace'],
       },
       borderRadius: {
         lg: "var(--radius)",

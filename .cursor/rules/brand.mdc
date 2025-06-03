@@ -1,0 +1,102 @@
+---
+description: 
+globs: *.tsx,*.css
+alwaysApply: false
+---
+# Fortana Brand Spec
+
+## 🎨 Color Palette
+
+### Primary Colors
+- **brand.primary**: `#1D33DD` – Palatinate Blue  
+  - Use for: logo, primary buttons, links, active states  
+  - Avoid large background blocks unless paired with white/light surfaces  
+
+- **brand.surface**: `#A6CFD5` – Light Blue  
+  - Use for: background surfaces, section containers, app layout  
+
+- **brand.surfaceAlt**: `#BFDBF7` – Columbia Blue  
+  - Use for: hover states, cards, input backgrounds  
+
+- **brand.accent**: `#0A8754` – Sea Green  
+  - Use for: success indicators, data highlights, CTA accents  
+
+- **brand.attention**: `#D81E5B` – Raspberry  
+  - Use for: alerts, promotional buttons, high-contrast badges  
+
+- **brand.text**: `#222222` – Eerie Black  
+  - Use for: body text, navigation, headings  
+
+- **brand.white**: `#FFFFFF` – White  
+  - Use for: base backgrounds, inverse text  
+
+- **brand.muted**: `#6B7280` – Muted Gray  
+  - Use for: helper text, secondary UI labels  
+
+- **brand.error**: `#DC2626` – Red 600  
+  - Use for: validation errors, critical alerts  
+
+---
+
+### Color Info
+
+- **Trust & Authority**: `#1D33DD` anchors the brand with strength and clarity  
+- **Light & Calm**: `#A6CFD5` and `#BFDBF7` keep the interface light, clean, and approachable  
+- **Financial Confidence**: `#0A8754` reinforces growth, success, and stability  
+- **Energy & Urgency**: `#D81E5B` should be used intentionally for bold actions or alerts  
+- **Readable & Neutral**: `#222222` ensures accessible, grounded typography across light backgrounds  
+
+---
+
+## ✍️ Typography
+
+### Logo
+- **Manrope 700**
+  - Usage: logo wordmark, app name, hero headings
+
+### Body Copy
+- **Inter 400**
+  - Usage: general copy, UI text, paragraphs
+
+### Monetary Values / Code
+- **Inconsolata**
+  - Usage: monetary values, transaction data, code blocks, alignment-critical numbers
+
+---
+
+## 🧱 Best Practices
+
+- Use `brand.primary` for strong CTAs, top navigation, and key interactions  
+- Use `brand.surface` and `brand.surfaceAlt` to create clean visual hierarchy  
+- Use `brand.accent` to reinforce growth or value  
+- Reserve `brand.attention` for high-signal, low-frequency use  
+- Use only 2–3 typefaces max for clarity  
+- Check accessibility contrast at all times  
+- Favor light UI with colorful accents unless inverting purposefully  
+
+---
+
+## 🧪 Tailwind Integration
+
+```js
+// tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          primary: '#1D33DD',
+          surface: '#A6CFD5',
+          surfaceAlt: '#BFDBF7',
+          accent: '#0A8754',
+          attention: '#D81E5B',
+          text: '#222222',
+          muted: '#6B7280',
+          white: '#FFFFFF',
+          error: '#DC2626',
+        },
+      },
+    },
+  },
+}
+```
